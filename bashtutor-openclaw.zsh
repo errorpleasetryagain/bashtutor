@@ -526,8 +526,8 @@ function _bashtutor_suggest_typo_fix() {
     for cmd_key in "${!BASHTUTOR_EXPLANATIONS[@]}"; do
         # Simple string distance: if first 2-3 chars match, it's a candidate
         if [[ "${cmd_key:0:2}" == "${typed:0:2}" ]]; then
-            return 0
             echo "$cmd_key"
+            return 0
         fi
     done
 
@@ -580,7 +580,7 @@ function _bashtutor_suggest_next() {
 
     # Count how many times each next-command followed this one
     local suggestion=$(grep "^${curr_base}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
-        cut -d'|' -f3 | \
+        cut -d'|' -f4 | \
         sort | uniq -c | sort -rn | \
         awk '$1 >= 3 {print $2; exit}')
 
@@ -1340,6 +1340,156 @@ function _bashtutor_local_suggest() {
         suggestion="iostat 1 5"
     elif [[ "$req_lower" =~ (load|system).*(load) ]]; then
         suggestion="uptime"
+
+    # Files — last/newest/oldest/recent
+    elif [[ "$req_lower" =~ (last|latest|newest|most.recent).*(file|created|made) ]]; then
+        suggestion="ls -lt | head -5"
+    elif [[ "$req_lower" =~ (oldest|first).*(file) ]]; then
+        suggestion="ls -ltr | head -5"
+    elif [[ "$req_lower" =~ (biggest|largest).*(file) ]]; then
+        suggestion="ls -lS | head -10"
+    elif [[ "$req_lower" =~ (what|which).*(file).*(here|folder|current) ]]; then
+        suggestion="ls -la"
+    elif [[ "$req_lower" =~ (how many).*(file) ]]; then
+        suggestion="ls | wc -l"
+    elif [[ "$req_lower" =~ (show|open|read|view|print|cat).*(file) ]]; then
+        suggestion="cat FILENAME"
+    elif [[ "$req_lower" =~ (first|top|beginning).*(file|lines) ]]; then
+        suggestion="head -20 FILENAME"
+    elif [[ "$req_lower" =~ (last|bottom|end).*(file|lines) ]]; then
+        suggestion="tail -20 FILENAME"
+
+    # Navigation
+    elif [[ "$req_lower" =~ (go|navigate|change).*(home) ]]; then
+        suggestion="cd ~"
+    elif [[ "$req_lower" =~ (go|navigate|change).*(back|previous|up) ]]; then
+        suggestion="cd .."
+    elif [[ "$req_lower" =~ (go|navigate|change).*(desktop) ]]; then
+        suggestion="cd ~/Desktop"
+    elif [[ "$req_lower" =~ (go|navigate|change).*(downloads) ]]; then
+        suggestion="cd ~/Downloads"
+    elif [[ "$req_lower" =~ (go|navigate|change).*(documents) ]]; then
+        suggestion="cd ~/Documents"
+
+    # macOS apps / open
+    elif [[ "$req_lower" =~ (open|launch).*(finder) ]]; then
+        suggestion="open ."
+    elif [[ "$req_lower" =~ (open|launch).*(app) ]]; then
+        suggestion="open -a 'APP NAME'"
+    elif [[ "$req_lower" =~ open.*(folder|director) ]]; then
+        suggestion="open FOLDER"
+    elif [[ "$req_lower" =~ open.*(file) ]]; then
+        suggestion="open FILENAME"
+    elif [[ "$req_lower" =~ (open|edit).*(zshrc|shell config|shell profile) ]]; then
+        suggestion="open ~/.zshrc"
+    elif [[ "$req_lower" =~ (reload|refresh|restart).*(shell|zshrc|terminal) ]]; then
+        suggestion="source ~/.zshrc"
+
+    # Environment / variables
+    elif [[ "$req_lower" =~ (show|list|see).*(env|environment|variable) ]]; then
+        suggestion="env | sort"
+    elif [[ "$req_lower" =~ (set|add|export).*(variable|env) ]]; then
+        suggestion="export MY_VAR='value'"
+    elif [[ "$req_lower" =~ (path|\$path) ]]; then
+        suggestion="echo \$PATH | tr ':' '\n'"
+
+    # Processes / apps
+    elif [[ "$req_lower" =~ (top|activity|monitor).*(process|app|cpu) ]]; then
+        suggestion="top -o cpu"
+    elif [[ "$req_lower" =~ (what|which).*(running|open|active) ]]; then
+        suggestion="ps aux | grep -v grep | head -20"
+    elif [[ "$req_lower" =~ (force|quit|kill).*(app) ]]; then
+        suggestion="pkill -f 'APP NAME'"
+
+    # SSH / remote
+    elif [[ "$req_lower" =~ (ssh|connect|remote).*(server|host) ]]; then
+        suggestion="ssh user@hostname"
+    elif [[ "$req_lower" =~ (copy|upload|send).*(remote|server|ssh) ]]; then
+        suggestion="scp FILE user@hostname:/path/"
+    elif [[ "$req_lower" =~ (download|get).*(remote|server|ssh) ]]; then
+        suggestion="scp user@hostname:/path/FILE ."
+    elif [[ "$req_lower" =~ (generate|create|make).*(ssh).*(key) ]]; then
+        suggestion="ssh-keygen -t ed25519"
+
+    # Text / editing
+    elif [[ "$req_lower" =~ (replace|substitute|swap).*(text|word|string) ]]; then
+        suggestion="sed -i '' 's/OLD/NEW/g' FILENAME"
+    elif [[ "$req_lower" =~ (sort|order).*(line|text|file) ]]; then
+        suggestion="sort FILENAME"
+    elif [[ "$req_lower" =~ (unique|dedupe|duplicate).*(line) ]]; then
+        suggestion="sort FILENAME | uniq"
+    elif [[ "$req_lower" =~ (word|character).*(count|number) ]]; then
+        suggestion="wc FILENAME"
+    elif [[ "$req_lower" =~ (diff|compare|different).*(file) ]]; then
+        suggestion="diff FILE1 FILE2"
+    elif [[ "$req_lower" =~ (combine|merge|join).*(file) ]]; then
+        suggestion="cat FILE1 FILE2 > combined.txt"
+
+    # Clipboard
+    elif [[ "$req_lower" =~ (copy|clipboard).*(output|result|command) ]]; then
+        suggestion="COMMAND | pbcopy"
+    elif [[ "$req_lower" =~ (paste|clipboard).*(file) ]]; then
+        suggestion="pbpaste > FILENAME"
+
+    # Archives
+    elif [[ "$req_lower" =~ (extract|unpack|open).*(tar|gz|tarball) ]]; then
+        suggestion="tar -xzf ARCHIVE.tar.gz"
+    elif [[ "$req_lower" =~ (create|make|compress).*(tar|tarball) ]]; then
+        suggestion="tar -czf archive.tar.gz FOLDER/"
+
+    # Cron / scheduling
+    elif [[ "$req_lower" =~ (schedule|cron|automate|automatic) ]]; then
+        suggestion="crontab -e  # opens cron editor"
+    elif [[ "$req_lower" =~ (list|show).*(cron|scheduled) ]]; then
+        suggestion="crontab -l"
+
+    # Networking extras
+    elif [[ "$req_lower" =~ (trace|route|traceroute) ]]; then
+        suggestion="traceroute google.com"
+    elif [[ "$req_lower" =~ (dns|lookup|resolve).*(domain|hostname) ]]; then
+        suggestion="nslookup DOMAIN"
+    elif [[ "$req_lower" =~ (hostname|computer.name|machine.name) ]]; then
+        suggestion="hostname"
+
+    # macOS system
+    elif [[ "$req_lower" =~ (restart|reboot).*(mac|computer) ]]; then
+        suggestion="sudo shutdown -r now"
+    elif [[ "$req_lower" =~ (shutdown|turn off|power off) ]]; then
+        suggestion="sudo shutdown -h now"
+    elif [[ "$req_lower" =~ (sleep|suspend).*(mac|computer) ]]; then
+        suggestion="pmset sleepnow"
+    elif [[ "$req_lower" =~ (volume|sound|audio).*(set|change) ]]; then
+        suggestion="osascript -e 'set volume output volume 50'  # 0-100"
+    elif [[ "$req_lower" =~ (mute|silence) ]]; then
+        suggestion="osascript -e 'set volume output muted true'"
+    elif [[ "$req_lower" =~ (notification|notify|alert).*(send|show) ]]; then
+        suggestion="osascript -e 'display notification \"MESSAGE\" with title \"TITLE\"'"
+    elif [[ "$req_lower" =~ (screenshot|screen.capture|capture.screen) ]]; then
+        suggestion="screencapture ~/Desktop/screenshot.png"
+    elif [[ "$req_lower" =~ (spotlight|index|reindex) ]]; then
+        suggestion="sudo mdutil -E /"
+
+    # Misc useful
+    elif [[ "$req_lower" =~ (date|time|today|now) ]]; then
+        suggestion="date"
+    elif [[ "$req_lower" =~ (calendar|cal) ]]; then
+        suggestion="cal"
+    elif [[ "$req_lower" =~ (random|generate).*(password|string) ]]; then
+        suggestion="openssl rand -base64 16"
+    elif [[ "$req_lower" =~ (encode|base64).*(encode) ]]; then
+        suggestion="echo 'TEXT' | base64"
+    elif [[ "$req_lower" =~ (decode|base64).*(decode) ]]; then
+        suggestion="echo 'BASE64STRING' | base64 --decode"
+    elif [[ "$req_lower" =~ (hash|checksum|md5|sha) ]]; then
+        suggestion="md5 FILENAME  # or: shasum -a 256 FILENAME"
+    elif [[ "$req_lower" =~ (time|how long).*(command|take) ]]; then
+        suggestion="time COMMAND"
+    elif [[ "$req_lower" =~ (manual|man|help|docs).*(command) ]]; then
+        suggestion="man COMMAND"
+    elif [[ "$req_lower" =~ (clear|clean).*(screen|terminal) ]]; then
+        suggestion="clear"
+    elif [[ "$req_lower" =~ (who|logged|user).*(in|am) ]]; then
+        suggestion="whoami"
     fi
 
     echo ""
