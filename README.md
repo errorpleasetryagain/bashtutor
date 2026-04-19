@@ -10,27 +10,43 @@ Two editions:
 
 ## ⚡ One-line Install
 
+Paste this into any terminal — it handles everything:
+
 ```bash
-# OpenClaw edition (default)
-bash install.sh
-
-# Claude API edition
-bash install.sh --claude
-
-# Remove BashTutor completely
-bash install.sh --uninstall
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)"
 ```
 
-Then activate in your current terminal:
+This will:
+- Check you have macOS and zsh (and tell you how to get them if not)
+- Clone BashTutor to `~/.bashtutor/`
+- Wire it into your shell so it loads every time a terminal opens
+- Activate it immediately
+
+Then restart your terminal or run:
 ```bash
 source ~/.zshrc
 ```
 
-For the **Claude edition**, add your API key to `~/.zshrc`:
+**Claude API edition** (uses Anthropic AI instead of OpenClaw):
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)" -- --claude
 ```
-Get a free key at [console.anthropic.com](https://console.anthropic.com)
+
+You'll also need an API key — get one free at [console.anthropic.com](https://console.anthropic.com), then add it:
+```bash
+echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc && source ~/.zshrc
+```
+
+**Don't have zsh?** Run this first:
+```bash
+brew install zsh && chsh -s $(which zsh)
+```
+Then open a new terminal and run the install command above.
+
+**Don't have Homebrew?** Run this first:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
 ---
 
