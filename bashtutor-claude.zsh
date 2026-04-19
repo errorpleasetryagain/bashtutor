@@ -933,7 +933,8 @@ function bashme() {
 
     if [[ -z "$request" || "$request" == "help" || "$request" == "--help" ]]; then
         echo ""
-        echo "${_BT_ORANGE}${_BT_BOLD}  Ba\$h Tutor${_BT_RESET}${_BT_WHITE}${_BT_BOLD}  ~  bash for humans${_BT_RESET}  ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}"
+        echo "${_BT_ORANGE}${_BT_BOLD}  Ba\$h \\${_BT_RESET}"
+        echo "${_BT_GREEN}${_BT_BOLD}  / Tutor${_BT_RESET}${_BT_WHITE}  ~  bash for humans${_BT_RESET}  ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}"
         echo "${_BT_GREEN}  ──────────────────────────────────────────────${_BT_RESET}"
         echo ""
         echo "  ${_BT_BOLD}The main command:${_BT_RESET}"
@@ -1754,7 +1755,8 @@ if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo "${_BT_GREEN}${_BT_BOLD}      ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
     echo "${_BT_GREEN}${_BT_BOLD}      ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
     echo "${_BT_WHITE}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}      Ba\$h Tutor  ~  bash for humans${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}      Ba\$h \\${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      / Tutor${_BT_RESET}${_BT_WHITE}  ~  bash for humans${_BT_RESET}"
     echo "${_BT_GREEN}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
     echo ""
     echo "      ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_ORANGE}🤖 Claude Edition${_BT_RESET}"
