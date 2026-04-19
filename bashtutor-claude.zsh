@@ -89,6 +89,7 @@ function _bashtutor_load_explanations() {
         [ls]="Listed the files and folders here"
         [ll]="Listed files with full details — size, date, permissions"
         [la]="Listed everything including hidden files (ones starting with .)"
+        [lh]="Listed files with sizes in human-friendly format (KB, MB, GB)"
         [cd]="Moved into a different folder"
         [pwd]="Showed you where you are right now"
         [mkdir]="Created a new folder"
@@ -124,22 +125,93 @@ function _bashtutor_load_explanations() {
         [unzip]="Unpacked a .zip archive"
         [gzip]="Compressed a single file"
         [gunzip]="Decompressed a .gz file"
+        [bzip2]="Compressed a file with better compression than gzip"
+        [bunzip2]="Decompressed a .bz2 file"
+        [xz]="Compressed a file with very high compression ratio"
+        [unxz]="Decompressed an .xz file"
+        [7z]="Packed or unpacked a 7-Zip archive"
+        [zstd]="Compressed or decompressed a zstd file — fast compression"
         [chmod]="Changed who can read, write, or run a file"
         [chown]="Changed who owns a file"
+        [chgrp]="Changed which group owns a file"
+        [umask]="Set the default permissions for new files you create"
         [sudo]="Ran a command with admin powers — use carefully"
         [su]="Switched to a different user account"
         [passwd]="Changed a user's password"
         [git]="Ran a git command — for tracking code changes"
+        [git-status]="Checked what's changed in your git repository"
+        [git-log]="Showed the history of commits with details"
+        [git-diff]="Showed what changed between versions"
+        [git-branch]="Listed or managed branches in your repository"
+        [git-checkout]="Switched to a different branch or version"
+        [git-merge]="Combined changes from one branch into another"
+        [git-rebase]="Replayed commits from one branch on top of another"
+        [git-clone]="Downloaded a full copy of a repository"
+        [git-fetch]="Downloaded updates from a remote repository"
+        [git-push]="Uploaded your commits to a remote repository"
+        [git-pull]="Downloaded and merged updates from a remote repository"
+        [git-stash]="Saved your changes temporarily without committing"
+        [git-tag]="Created a named marker for a specific commit"
+        [git-blame]="Showed who changed each line in a file and when"
+        [git-reset]="Undid commits or unstaged files"
+        [git-add]="Staged changes to be included in the next commit"
+        [git-commit]="Saved your staged changes permanently"
+        [git-remote]="Managed connections to remote repositories"
         [brew]="Ran Homebrew — macOS package manager"
+        [brew-install]="Installed a package via Homebrew"
+        [brew-uninstall]="Removed a package installed via Homebrew"
+        [brew-update]="Updated Homebrew itself"
+        [brew-upgrade]="Upgraded all installed packages to latest versions"
+        [brew-list]="Showed all packages installed via Homebrew"
+        [brew-search]="Searched for packages available in Homebrew"
+        [brew-info]="Showed detailed information about a Homebrew package"
+        [brew-doctor]="Checked Homebrew installation for problems"
         [npm]="Ran Node.js package manager"
-        [pip]="Ran Python package manager"
+        [npm-init]="Created a new Node.js project with a package.json file"
+        [npm-install]="Installed packages listed in package.json"
+        [npm-run]="Ran a script defined in package.json"
+        [npm-start]="Started your Node.js application"
+        [npm-list]="Showed all installed npm packages"
+        [npm-search]="Searched for packages on the npm registry"
+        [npm-update]="Updated packages to their latest versions"
+        [npm-audit]="Checked for security vulnerabilities in packages"
+        [pip]="Ran Python package manager (Python 2)"
         [pip3]="Ran Python 3 package manager"
-        [python]="Ran a Python program or script"
+        [pip-install]="Installed a Python package"
+        [pip-list]="Showed all installed Python packages"
+        [pip-freeze]="Saved a list of installed packages to a file"
+        [pip-uninstall]="Removed a Python package"
+        [pip-search]="Searched for Python packages"
+        [python]="Ran a Python program or script (usually Python 2)"
         [python3]="Ran a Python 3 program or script"
         [node]="Ran a Node.js program"
         [docker]="Ran a Docker container command"
+        [docker-ps]="Showed all running Docker containers"
+        [docker-images]="Showed all Docker images on your system"
+        [docker-run]="Started a new Docker container"
+        [docker-build]="Built a Docker image from a Dockerfile"
+        [docker-stop]="Stopped a running Docker container"
+        [docker-rm]="Removed a Docker container"
+        [docker-pull]="Downloaded a Docker image from a registry"
+        [docker-push]="Uploaded a Docker image to a registry"
+        [docker-logs]="Showed output/logs from a Docker container"
+        [docker-exec]="Ran a command inside a running container"
+        [docker-compose]="Managed multi-container Docker applications"
         [kubectl]="Ran a Kubernetes command"
         [make]="Built software using instructions in a Makefile"
+        [cmake]="Generated build system files from CMakeLists.txt"
+        [gradle]="Built Java/Kotlin projects with Gradle"
+        [mvn]="Built Java projects with Maven"
+        [cargo]="Built Rust projects with Cargo"
+        [go]="Compiled or ran Go programs"
+        [rustc]="Compiled a Rust program"
+        [javac]="Compiled a Java program to bytecode"
+        [java]="Ran a compiled Java program"
+        [deno]="Ran a Deno (modern Node.js alternative) program"
+        [ruby]="Ran a Ruby program or script"
+        [gem]="Managed Ruby packages"
+        [bundle]="Managed Ruby project dependencies"
+        [rails]="Ran a Ruby on Rails web application"
         [man]="Opened the manual page for a command"
         [clear]="Cleared the terminal screen"
         [exit]="Closed this terminal session"
@@ -159,6 +231,13 @@ function _bashtutor_load_explanations() {
         [caffeinate]="Kept your Mac from sleeping"
         [say]="Made your Mac speak text out loud"
         [screencapture]="Took a screenshot (macOS)"
+        [sips]="Manipulated image files — crop, rotate, resize (macOS)"
+        [mdls]="Showed detailed metadata about a file (macOS)"
+        [mdfind]="Searched for files using Spotlight (macOS)"
+        [osascript]="Ran AppleScript commands (macOS)"
+        [xattr]="Managed extended file attributes"
+        [file]="Showed what type of file something is"
+        [stat]="Showed detailed file information — size, permissions, dates"
         [xargs]="Ran a command once for each item from a list"
         [awk]="Processed text — great for working with columns"
         [sed]="Edited text using find-and-replace rules"
@@ -168,6 +247,11 @@ function _bashtutor_load_explanations() {
         [tr]="Translated or deleted characters"
         [cut]="Cut out specific columns from text"
         [paste]="Joined lines from multiple files side by side"
+        [join]="Merged lines from files that have a common key"
+        [comm]="Compared two sorted files and showed differences"
+        [column]="Aligned text into neat columns"
+        [fmt]="Rewrapped text to fit a width limit"
+        [split]="Split a file into smaller pieces"
         [diff]="Compared two files and showed what's different"
         [patch]="Applied a diff patch to a file"
         [ln]="Created a link (shortcut) to a file"
@@ -182,7 +266,10 @@ function _bashtutor_load_explanations() {
         [nohup]="Ran a command that keeps going even after you log out"
         [sleep]="Paused for a number of seconds"
         [time]="Measured how long a command takes to run"
+        [timeout]="Ran a command and stopped it if it takes too long"
         [watch]="Ran a command repeatedly and showed the output"
+        [nice]="Ran a command with lower priority"
+        [wait]="Waited for a background job to finish"
         [cron]="Scheduled commands to run automatically"
         [crontab]="Edited your scheduled tasks list"
         [at]="Scheduled a one-off command to run later"
@@ -194,9 +281,22 @@ function _bashtutor_load_explanations() {
         [lsof]="Listed open files and the programs using them"
         [nmap]="Scanned a network for open ports"
         [traceroute]="Showed the path data takes to reach a server"
+        [mtr]="Showed network path with live statistics — mix of traceroute and ping"
+        [whois]="Looked up domain registration information"
         [dig]="Looked up DNS information for a domain"
         [nslookup]="Queried a DNS server"
         [host]="Found the IP address for a domain name"
+        [nc]="Tested network connections — great for checking if ports are open"
+        [telnet]="Connected to a remote server on a specific port"
+        [tcpdump]="Captured network traffic for analysis"
+        [ssh-keygen]="Generated SSH security keys for passwordless login"
+        [ssh-copy-id]="Copied your SSH public key to a server"
+        [sftp]="Connected to a server for secure file transfer"
+        [vim]="Opened a powerful text editor — press :q to exit"
+        [nano]="Opened an easier text editor — press Ctrl+X to exit"
+        [emacs]="Opened a highly customizable text editor"
+        [code]="Opened Visual Studio Code"
+        [subl]="Opened Sublime Text editor"
         [openssl]="Ran cryptography and certificate tools"
         [base64]="Encoded or decoded base64 data"
         [md5]="Calculated an MD5 checksum"
@@ -204,10 +304,24 @@ function _bashtutor_load_explanations() {
         [diskutil]="Managed disks and volumes (macOS)"
         [hdiutil]="Worked with disk images (macOS)"
         [defaults]="Read or wrote macOS app preferences"
+        [plutil]="Read or wrote property list files (.plist)"
         [launchctl]="Managed macOS background services"
         [pmset]="Managed power settings (macOS)"
         [softwareupdate]="Managed macOS software updates"
         [xcode-select]="Managed Xcode command line tools"
+        [security]="Managed certificates and keychains (macOS)"
+        [spctl]="Managed system security policies (macOS)"
+        [codesign]="Signed code with a digital signature (macOS)"
+        [networksetup]="Managed network configuration (macOS)"
+        [scutil]="Queried system configuration (macOS)"
+        [systemsetup]="Configured system settings (macOS)"
+        [mysql]="Opened a MySQL database client"
+        [psql]="Opened a PostgreSQL database client"
+        [sqlite3]="Opened an SQLite database"
+        [mongosh]="Opened a MongoDB database shell"
+        [redis-cli]="Opened a Redis cache command-line client"
+        [systemctl]="Managed services on Linux systems"
+        [systemd]="Managed system services and boot process (Linux)"
     )
 
     export BASHTUTOR_EXPLANATIONS_LOADED="1"
@@ -825,12 +939,68 @@ function bashme() {
         echo "  ${_BT_CYAN}bashme${_BT_RESET} find all pdf files in downloads"
         echo "  ${_BT_CYAN}bashme${_BT_RESET} how much disk space am i using"
         echo "  ${_BT_CYAN}bashme${_BT_RESET} copy everything from desktop to documents"
+        echo "  ${_BT_CYAN}bashme${_BT_RESET} run a python script called myscript.py"
+        echo "  ${_BT_CYAN}bashme${_BT_RESET} install the requests python package"
+        echo ""
+        echo "  ${_BT_BOLD}Explain any command:${_BT_RESET}"
+        echo "  Paste a command and add ${_BT_YELLOW}what?${_BT_RESET} at the end:"
+        echo "  ${_BT_CYAN}bashme${_BT_RESET} find . -name '*.log' -mtime +7 -delete what?"
         echo ""
         echo "  ${_BT_BOLD}Shortcuts:${_BT_RESET}"
         echo "  ${_BT_MAGENTA}bt${_BT_RESET}              same as bashme"
         echo "  ${_BT_MAGENTA}Ctrl+B${_BT_RESET}          explain the last command"
         echo "  ${_BT_MAGENTA}btx${_BT_RESET}             toggle auto-explain on/off"
         echo "  ${_BT_MAGENTA}bth${_BT_RESET}             show recent command history"
+        echo ""
+        return 0
+    fi
+
+    # -------------------------------------------------------------------------
+    # WHAT? MODE — explain a command instead of suggesting one
+    # Usage: bashme <any command> what?
+    # -------------------------------------------------------------------------
+    if [[ "$request" == *" what?" || "$request" == *" what" || "$request" == "what?"* ]]; then
+        local cmd_to_explain="${request% what?}"
+        cmd_to_explain="${cmd_to_explain% what}"
+        cmd_to_explain="${cmd_to_explain#what? }"
+        cmd_to_explain="${cmd_to_explain#what }"
+        cmd_to_explain="$(echo "$cmd_to_explain" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+        echo ""
+        echo "${_BT_BOLD}${_BT_WHITE}Explaining:${_BT_RESET} ${_BT_BLUE}${cmd_to_explain}${_BT_RESET}"
+        echo ""
+
+        local explanation=""
+
+        if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
+            _bt_thinking
+            local what_prompt="Explain this command in plain English. No jargon. Be friendly and clear. Use 2-4 short sentences. Break it down piece by piece if it has multiple parts.
+
+Command: ${cmd_to_explain}
+
+Format your answer like:
+What it does: [one sentence summary]
+How it works: [break down each part simply]
+Watch out: [any gotchas or risks, or skip this if none]"
+
+            explanation=$(_bashtutor_ask_claude "$what_prompt" 20)
+        fi
+
+        if [[ -n "$explanation" ]]; then
+            echo "$explanation" | while IFS= read -r line; do
+                echo "  ${_BT_CYAN}${line}${_BT_RESET}"
+            done
+        else
+            local base=$(echo "$cmd_to_explain" | awk '{print $1}')
+            local local_exp="${BASHTUTOR_EXPLANATIONS[$base]}"
+            if [[ -n "$local_exp" ]]; then
+                _bt_explain "$local_exp"
+                echo ""
+                _bt_tip "Set ANTHROPIC_API_KEY for a full breakdown"
+            else
+                _bt_warn "Not sure what '$base' does — add your API key for full explanations"
+            fi
+        fi
         echo ""
         return 0
     fi
@@ -844,11 +1014,15 @@ Recent commands for context:
 $recent"
     fi
 
-    local prompt="You are a helpful bash tutor. Give ONLY the bash command, nothing else — no explanation, no markdown, no code fences.
+    local prompt="You are a helpful bash and Python tutor. Give ONLY the command, nothing else — no explanation, no markdown, no code fences.
 
-Task: $request
-macOS: yes
-Shell: zsh${history_context}
+Rules:
+- For shell/file/system tasks: give a zsh/bash command
+- For Python tasks (install packages, run scripts, virtual envs, pip): give the correct shell command to do it (e.g. pip3 install X, python3 script.py, python3 -m venv env)
+- For 'write a python script that does X': give a python3 one-liner or the python3 command to run an inline script using -c flag
+- macOS, zsh shell
+
+Task: $request${history_context}
 
 Reply with just the command."
 
@@ -985,6 +1159,197 @@ function _bashtutor_local_suggest() {
     # File size
     elif [[ "$req_lower" =~ (size|big|large|small).*(file) ]]; then
         suggestion="ls -lhS | head -10  # largest files first"
+    # File operations — count/manipulate
+    elif [[ "$req_lower" =~ count.*(file|line) ]]; then
+        if [[ "$req_lower" =~ line ]]; then
+            suggestion="wc -l FILENAME"
+        else
+            suggestion="ls | wc -l"
+        fi
+    elif [[ "$req_lower" =~ (empty|erase|clear).*(file) ]]; then
+        suggestion="> FILENAME"
+    elif [[ "$req_lower" =~ (append|add).*(file|end) ]]; then
+        suggestion="echo \"text\" >> FILENAME"
+    elif [[ "$req_lower" =~ (follow|watch|tail).*(log) ]]; then
+        suggestion="tail -f FILENAME"
+    elif [[ "$req_lower" =~ (show|print).*(last|end) ]]; then
+        suggestion="tail -100 FILENAME"
+    elif [[ "$req_lower" =~ (find|search).*(large|big).*(file) ]]; then
+        suggestion="find . -size +100M -type f"
+    elif [[ "$req_lower" =~ (find|search).*(recent|modified) ]]; then
+        suggestion="find . -mtime -1 -type f"
+    elif [[ "$req_lower" =~ (check|test).*(exist|exist) ]]; then
+        suggestion="test -f FILENAME && echo \"exists\" || echo \"not found\""
+    elif [[ "$req_lower" =~ (type|kind).*(file|file) ]]; then
+        suggestion="file FILENAME"
+    elif [[ "$req_lower" =~ (encoding|charset).*(file) ]]; then
+        suggestion="file -I FILENAME"
+    elif [[ "$req_lower" =~ (symlink|link).*(target|point) ]]; then
+        suggestion="readlink -f LINK"
+    elif [[ "$req_lower" =~ (create|make).*(symlink|link) ]]; then
+        suggestion="ln -s TARGET LINK_NAME"
+    elif [[ "$req_lower" =~ (bulk|mass|many).*(rename) ]]; then
+        suggestion="for f in *.old; do mv \"\$f\" \"\${f%.old}.new\"; done"
+    # Python — run a script
+    elif [[ "$req_lower" =~ (run|execute).*(python|py).*(script|file) ]]; then
+        suggestion="python3 SCRIPT.py"
+    elif [[ "$req_lower" =~ (run|execute).*\.py ]]; then
+        suggestion="python3 SCRIPT.py"
+    # Python — install a package
+    elif [[ "$req_lower" =~ (install|add).*(python|pip).*(package|library|module) ]] || \
+         [[ "$req_lower" =~ (pip|pip3).*(install) ]] || \
+         [[ "$req_lower" =~ install.*python.* ]]; then
+        suggestion="pip3 install PACKAGE_NAME"
+    # Python — uninstall a package
+    elif [[ "$req_lower" =~ (uninstall|remove).*(python|pip).*(package) ]]; then
+        suggestion="pip3 uninstall PACKAGE_NAME"
+    # Python — list installed packages
+    elif [[ "$req_lower" =~ (list|show).*(python|pip).*(package|install) ]]; then
+        suggestion="pip3 list"
+    # Python — virtual environment
+    elif [[ "$req_lower" =~ (create|make|new).*(virtual|venv|env) ]]; then
+        suggestion="python3 -m venv env && source env/bin/activate"
+    elif [[ "$req_lower" =~ (activate).*(virtual|venv|env) ]]; then
+        suggestion="source env/bin/activate"
+    elif [[ "$req_lower" =~ (deactivate|exit).*(virtual|venv|env) ]]; then
+        suggestion="deactivate"
+    # Python — check version
+    elif [[ "$req_lower" =~ (python).*(version|which|where) ]]; then
+        suggestion="python3 --version && which python3"
+    # Python — run a one-liner
+    elif [[ "$req_lower" =~ (python).*(print|calculate|convert|quick) ]]; then
+        suggestion="python3 -c 'print(YOUR_CODE_HERE)'"
+    # Python — requirements
+    elif [[ "$req_lower" =~ (install).*(requirements|req) ]]; then
+        suggestion="pip3 install -r requirements.txt"
+    elif [[ "$req_lower" =~ (save|export|freeze).*(requirements|packages) ]]; then
+        suggestion="pip3 freeze > requirements.txt"
+    elif [[ "$req_lower" =~ (upgrade|update).*(pip) ]]; then
+        suggestion="pip3 install --upgrade pip"
+    # Homebrew
+    elif [[ "$req_lower" =~ (brew|homebrew).*(install) ]]; then
+        suggestion="brew install PACKAGE"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(uninstall|remove) ]]; then
+        suggestion="brew uninstall PACKAGE"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(update|upgrade) ]]; then
+        suggestion="brew update && brew upgrade"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(list|show) ]]; then
+        suggestion="brew list"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(search) ]]; then
+        suggestion="brew search QUERY"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(info) ]]; then
+        suggestion="brew info PACKAGE"
+    elif [[ "$req_lower" =~ (brew|homebrew).*(doctor) ]]; then
+        suggestion="brew doctor"
+    # Node.js / npm
+    elif [[ "$req_lower" =~ (npm|node).*(init) ]]; then
+        suggestion="npm init -y"
+    elif [[ "$req_lower" =~ (npm|node).*(install|package) ]]; then
+        suggestion="npm install PACKAGE"
+    elif [[ "$req_lower" =~ (npm|node).*(dev|development) ]]; then
+        suggestion="npm install --save-dev PACKAGE"
+    elif [[ "$req_lower" =~ (npm|node).*(list|packages) ]]; then
+        suggestion="npm list"
+    elif [[ "$req_lower" =~ (npm|node).*(run|script) ]]; then
+        suggestion="npm run SCRIPT"
+    elif [[ "$req_lower" =~ (npm|node).*(start) ]]; then
+        suggestion="npm start"
+    elif [[ "$req_lower" =~ (npm|node).*(build) ]]; then
+        suggestion="npm run build"
+    elif [[ "$req_lower" =~ (npm|node).*(update|upgrade) ]]; then
+        suggestion="npm update"
+    elif [[ "$req_lower" =~ (npm|node).*(audit|security) ]]; then
+        suggestion="npm audit fix"
+    # Git (expanded)
+    elif [[ "$req_lower" =~ git.*(log|history) ]]; then
+        suggestion="git log --oneline -20"
+    elif [[ "$req_lower" =~ git.*(diff|different) ]]; then
+        suggestion="git diff"
+    elif [[ "$req_lower" =~ git.*(branch) ]]; then
+        suggestion="git branch -a"
+    elif [[ "$req_lower" =~ git.*(create|new).*(branch) ]]; then
+        suggestion="git checkout -b BRANCH_NAME"
+    elif [[ "$req_lower" =~ git.*(switch|checkout).*(branch) ]]; then
+        suggestion="git checkout BRANCH_NAME"
+    elif [[ "$req_lower" =~ git.*(merge) ]]; then
+        suggestion="git merge BRANCH_NAME"
+    elif [[ "$req_lower" =~ git.*(stash) ]]; then
+        if [[ "$req_lower" =~ (pop|restore) ]]; then
+            suggestion="git stash pop"
+        else
+            suggestion="git stash"
+        fi
+    elif [[ "$req_lower" =~ git.*(clone) ]]; then
+        suggestion="git clone URL"
+    elif [[ "$req_lower" =~ git.*(remote) ]]; then
+        suggestion="git remote -v"
+    elif [[ "$req_lower" =~ git.*(undo|revert).*(commit) ]]; then
+        suggestion="git reset HEAD~1"
+    elif [[ "$req_lower" =~ git.*(discard|forget).*(change) ]]; then
+        suggestion="git checkout -- ."
+    elif [[ "$req_lower" =~ git.*(tag) ]]; then
+        suggestion="git tag v1.0.0"
+    elif [[ "$req_lower" =~ git.*(blame) ]]; then
+        suggestion="git blame FILENAME"
+    # Docker
+    elif [[ "$req_lower" =~ docker.*(list|show).*(container) ]]; then
+        suggestion="docker ps"
+    elif [[ "$req_lower" =~ docker.*(all|every).*(container) ]]; then
+        suggestion="docker ps -a"
+    elif [[ "$req_lower" =~ docker.*(run|start).*(container) ]]; then
+        suggestion="docker run -it IMAGE"
+    elif [[ "$req_lower" =~ docker.*(stop).*(container) ]]; then
+        suggestion="docker stop CONTAINER"
+    elif [[ "$req_lower" =~ docker.*(remove|delete).*(container) ]]; then
+        suggestion="docker rm CONTAINER"
+    elif [[ "$req_lower" =~ docker.*(list|show).*(image) ]]; then
+        suggestion="docker images"
+    elif [[ "$req_lower" =~ docker.*(pull|download).*(image) ]]; then
+        suggestion="docker pull IMAGE"
+    elif [[ "$req_lower" =~ docker.*(build).*(image) ]]; then
+        suggestion="docker build -t NAME ."
+    elif [[ "$req_lower" =~ docker.*(logs|output) ]]; then
+        suggestion="docker logs CONTAINER"
+    elif [[ "$req_lower" =~ docker.*(exec|into).*(container) ]]; then
+        suggestion="docker exec -it CONTAINER bash"
+    elif [[ "$req_lower" =~ docker.*(compose|multi).*(container) ]]; then
+        if [[ "$req_lower" =~ (down|stop) ]]; then
+            suggestion="docker-compose down"
+        else
+            suggestion="docker-compose up -d"
+        fi
+    # macOS specific
+    elif [[ "$req_lower" =~ (mac|mac).*(specs|info|about|hardware) ]]; then
+        suggestion="system_profiler SPHardwareDataType"
+    elif [[ "$req_lower" =~ (battery|charge|power) ]]; then
+        suggestion="pmset -g batt"
+    elif [[ "$req_lower" =~ (wifi|wireless|network).*(connect) ]]; then
+        suggestion="networksetup -getairportnetwork en0"
+    elif [[ "$req_lower" =~ (port|listening|open) ]]; then
+        suggestion="lsof -i -P -n | grep LISTEN"
+    elif [[ "$req_lower" =~ (flush|clear).*(dns) ]]; then
+        suggestion="sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder"
+    elif [[ "$req_lower" =~ (firewall) ]]; then
+        suggestion="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate"
+    elif [[ "$req_lower" =~ (kill|port).*(port|port) ]]; then
+        suggestion="lsof -ti:PORT | xargs kill -9"
+    elif [[ "$req_lower" =~ (who|using).*(port) ]]; then
+        suggestion="lsof -i :PORT"
+    elif [[ "$req_lower" =~ (ip|address|ip) ]]; then
+        suggestion="ipconfig getifaddr en0"
+    elif [[ "$req_lower" =~ (network|interface|interface) ]]; then
+        suggestion="ifconfig"
+    elif [[ "$req_lower" =~ (public|external).*(ip|address) ]]; then
+        suggestion="curl -s ifconfig.me"
+    # System info (expanded)
+    elif [[ "$req_lower" =~ (cpu|memory|load|running).*(process|process) ]]; then
+        suggestion="ps aux --sort=-%cpu | head -10"
+    elif [[ "$req_lower" =~ (memory|ram).*(top|most) ]]; then
+        suggestion="ps aux | sort -rk 4 | head -10"
+    elif [[ "$req_lower" =~ (disk|io|input|output) ]]; then
+        suggestion="iostat 1 5"
+    elif [[ "$req_lower" =~ (load|system).*(load) ]]; then
+        suggestion="uptime"
     fi
 
     echo ""
@@ -997,13 +1362,14 @@ function _bashtutor_local_suggest() {
     else
         _bt_warn "Not sure how to do that with local patterns"
         echo ""
-        echo "  Try describing it differently, or start OpenClaw for smarter suggestions."
+        echo "  Try describing it differently, or set your API key for smarter suggestions."
         echo ""
         echo "  ${_BT_BOLD}Some things I can help with offline:${_BT_RESET}"
         echo "  • show files, find files, delete files"
         echo "  • check disk space, copy, move, rename"
         echo "  • git commands, zip/unzip, search text"
         echo "  • check network, list processes"
+        echo "  • python: run scripts, install packages, virtual envs"
     fi
     echo ""
 }
