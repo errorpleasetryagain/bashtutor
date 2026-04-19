@@ -811,9 +811,25 @@ function _bashtutor_ask_openclaw() {
         return 1
     fi
 
-    # Run with timeout - using correct OpenClaw agent syntax
+    # Run with timeout (macOS compatible using background job + sleep)
     local result
-    result=$(timeout "$timeout_secs" openclaw agent --message "$prompt" --agent main --thinking low 2>/dev/null)
+    if command -v timeout &>/dev/null; then
+        # Linux with timeout
+        result=$(timeout "$timeout_secs" openclaw agent --message "$prompt" --agent main --thinking low 2>/dev/null)
+    else
+        # macOS without timeout - use background job
+        openclaw agent --message "$prompt" --agent main --thinking low 2>/dev/null &> /tmp/bashtutor_ai_result &
+        local pid=$!
+        sleep "$timeout_secs"
+        if kill -0 $pid 2>/dev/null; then
+            kill -9 $pid 2>/dev/null
+            wait $pid 2>/dev/null
+        fi
+        if [[ -f /tmp/bashtutor_ai_result ]]; then
+            result=$(cat /tmp/bashtutor_ai_result)
+            rm -f /tmp/bashtutor_ai_result
+        fi
+    fi
     local rc=$?
 
     if [[ $rc -eq 0 && -n "$result" ]]; then
