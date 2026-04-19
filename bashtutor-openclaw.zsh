@@ -38,8 +38,8 @@ if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null; then
     _BT_RED=$(tput setaf 1)
     _BT_BLUE=$(tput setaf 4)
     _BT_WHITE=$(tput setaf 7)
-    _BT_ORANGE=$(printf '\033[38;5;179m')   # khaki
-    _BT_GREEN=$(printf '\033[38;5;22m')    # dark green
+    _BT_ORANGE=$(printf '\033[38;5;202m')   # Pantone 17-1464 TCX Flame Orange
+    _BT_GREEN=$(printf '\033[38;5;22m')    # Pantone PMS 3537 C forest green
 else
     _BT_RESET="" _BT_BOLD="" _BT_CYAN="" _BT_GREEN=""
     _BT_YELLOW="" _BT_MAGENTA="" _BT_RED="" _BT_BLUE="" _BT_WHITE="" _BT_ORANGE=""
@@ -1721,22 +1721,21 @@ _bashtutor_setup
 # Welcome message (once per session)
 if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo ""
-    echo "${_BT_ORANGE}${_BT_BOLD}      ╔════════════════════════════════════════════════╗${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ██████╗  █████╗ ███████╗██╗  ██╗            ║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ██╔══██╗██╔══██╗██╔════╝██║  ██║            ║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ██████╔╝███████║███████╗███████║            ║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ██╔══██╗██╔══██║╚════██║██╔══██║            ║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ██████╔╝██║  ██║███████║██║  ██║            ║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}      ║  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝            ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║  ████████╗██╗   ██╗████████╗ ██████╗ ██████╗  ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║     ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗ ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║     ██║   ██║   ██║   ██║   ██║   ██║██████╔╝ ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║     ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗ ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║     ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║ ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ║     ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝ ║${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}      ║                                                ║${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}      ║        Ba\$h Tutor  ~  bash for humans          ║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ╚════════════════════════════════════════════════╝${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╗  █████╗ ███████╗██╗  ██╗${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ██╔══██╗██╔══██╗██╔════╝██║  ██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╔╝███████║███████╗███████║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ██╔══██╗██╔══██║╚════██║██╔══██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╔╝██║  ██║███████║██║  ██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}   ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}   ████████╗██╗   ██╗████████╗ ██████╗ ██████╗${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ██║   ██║   ██║   ██║   ██║██████╔╝${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}      ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
+    echo "${_BT_WHITE}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
+    echo "${_BT_WHITE}${_BT_BOLD}      Ba\$h Tutor  ~  bash for humans${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
     echo ""
     echo "      ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_ORANGE}🦀 OpenClaw Edition${_BT_RESET}"
     echo ""
