@@ -332,6 +332,7 @@ main() {
     echo ""
     echo -e "  ${CYAN}bash ~/bashtutor-prod/install.sh --uninstall${NC}"
     echo ""
+    printf '\033[38;5;240m  Designed by Adam J. Turton\033[0m\n'
     echo -e "${GREEN}  ─────────────────────────────────────────────${NC}"
     echo ""
 }
