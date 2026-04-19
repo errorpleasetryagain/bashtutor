@@ -38,9 +38,10 @@ if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null; then
     _BT_RED=$(tput setaf 1)
     _BT_BLUE=$(tput setaf 4)
     _BT_WHITE=$(tput setaf 7)
+    _BT_ORANGE=$(tput setaf 214 2>/dev/null || tput setaf 3)  # 256-colour orange, fallback yellow
 else
     _BT_RESET="" _BT_BOLD="" _BT_CYAN="" _BT_GREEN=""
-    _BT_YELLOW="" _BT_MAGENTA="" _BT_RED="" _BT_BLUE="" _BT_WHITE=""
+    _BT_YELLOW="" _BT_MAGENTA="" _BT_RED="" _BT_BLUE="" _BT_WHITE="" _BT_ORANGE=""
 fi
 
 # Print helpers
@@ -1737,31 +1738,31 @@ _bashtutor_setup
 # Welcome message (once per session)
 if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo ""
-    echo "${_BT_CYAN}${_BT_BOLD}  ██████╗  █████╗ ███████╗██╗  ██╗${_BT_RESET}"
-    echo "${_BT_CYAN}${_BT_BOLD}  ██╔══██╗██╔══██╗██╔════╝██║  ██║${_BT_RESET}"
-    echo "${_BT_CYAN}${_BT_BOLD}  ██████╔╝███████║███████╗███████║${_BT_RESET}"
-    echo "${_BT_CYAN}${_BT_BOLD}  ██╔══██╗██╔══██║╚════██║██╔══██║${_BT_RESET}"
-    echo "${_BT_CYAN}${_BT_BOLD}  ██████╔╝██║  ██║███████║██║  ██║${_BT_RESET}"
-    echo "${_BT_CYAN}${_BT_BOLD}  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}  ████████╗██╗   ██╗████████╗ ██████╗ ██████╗ ${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}     ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ██║   ██║   ██║   ██║   ██║██████╔╝${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
-    echo "${_BT_MAGENTA}${_BT_BOLD}     ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ██████╗  █████╗ ███████╗██╗  ██╗${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ██╔══██╗██╔══██╗██╔════╝██║  ██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ██████╔╝███████║███████╗███████║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ██╔══██╗██╔══██║╚════██║██╔══██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ██████╔╝██║  ██║███████║██║  ██║${_BT_RESET}"
+    echo "${_BT_ORANGE}${_BT_BOLD}        ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}     ████████╗██╗   ██╗████████╗ ██████╗ ██████╗ ${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}        ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}        ██║   ██║   ██║   ██║   ██║   ██║██████╔╝${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}        ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}        ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
+    echo "${_BT_GREEN}${_BT_BOLD}        ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
     echo ""
-    echo "  ${_BT_WHITE}${_BT_BOLD}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_BLUE}🤖 Claude Edition${_BT_RESET}  ${_BT_WHITE}bash for humans${_BT_RESET}"
+    echo "        ${_BT_WHITE}${_BT_BOLD}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_ORANGE}🤖 Claude Edition${_BT_RESET}  ${_BT_WHITE}bash for humans${_BT_RESET}"
     echo ""
 
     if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        echo "  ${_BT_GREEN}✅ Claude API ready${_BT_RESET}   ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
+        echo "        ${_BT_GREEN}✅ Claude API ready${_BT_RESET}   ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
     else
-        echo "  ${_BT_YELLOW}⚠️  No API key — running in local mode${_BT_RESET}"
-        echo "  ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
+        echo "        ${_BT_YELLOW}⚠️  No API key — running in local mode${_BT_RESET}"
+        echo "        ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
     fi
 
     echo ""
-    echo "  ${_BT_CYAN}bashme${_BT_RESET} plain english   ${_BT_MAGENTA}Ctrl+B${_BT_RESET} explain last   ${_BT_WHITE}cmd + what?${_BT_RESET} explain anything"
+    echo "        ${_BT_ORANGE}qq${_BT_RESET} plain english   ${_BT_GREEN}Ctrl+B${_BT_RESET} explain last   ${_BT_WHITE}cmd + what?${_BT_RESET} explain anything"
     echo ""
     export BASHTUTOR_WELCOME_SHOWN="1"
 fi
