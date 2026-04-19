@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 # BashTutor Installer
-# Idempotent installation script for macOS with zsh
-# Version: 0.1.0
+# Installs BashTutor as a permanent macOS zsh OS-level plugin
+# Version: 1.2.0
+#
+# What this does:
+#   1. Checks you're on macOS with zsh
+#   2. Creates ~/.bashtutor/ (your permanent home for BashTutor)
+#   3. Copies the plugin there
+#   4. Adds one line to ~/.zshrc so it loads every time a terminal opens
+#   5. Activates it in your current terminal right now
+#
+# Usage:
+#   bash install.sh              # install OpenClaw edition (default)
+#   bash install.sh --claude     # install Claude API edition
+#   bash install.sh --uninstall  # remove everything
 
 set -euo pipefail
 
@@ -9,252 +21,203 @@ set -euo pipefail
 # CONFIGURATION
 # =============================================================================
 
-readonly SCRIPT_VERSION="0.1.0"
+readonly SCRIPT_VERSION="1.2.0"
 readonly BASHTUTOR_DIR="${HOME}/.bashtutor"
-readonly SOURCE_ZSHRC="${HOME}/.zshrc"
+readonly ZSHRC="${HOME}/.zshrc"
 readonly ZSHRC_BACKUP="${HOME}/.zshrc.bashtutor.bak.$(date +%Y%m%d%H%M%S)"
+readonly SOURCE_MARKER="# BashTutor — loaded at OS level (zsh plugin)"
 
-# Source file location (relative to install.sh or absolute)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SOURCE_PLUGIN="${SCRIPT_DIR}/bashtutor.zsh"
 
-# Source line marker for idempotency
-readonly SOURCE_MARKER="# BashTutor plugin - https://github.com/adamturton/bashtutor"
+# Default to OpenClaw edition
+EDITION="openclaw"
+PLUGIN_FILE="${SCRIPT_DIR}/bashtutor-openclaw.zsh"
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m' # No Color
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
-
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
-}
-
-die() {
-    log_error "$1"
-    exit 1
-}
-
-# =============================================================================
-# VALIDATION
-# =============================================================================
-
-detect_architecture() {
-    local arch
-    arch=$(uname -m)
-    
-    case "$arch" in
-        x86_64)
-            echo "Intel (x86_64)"
+# Parse args
+for arg in "$@"; do
+    case "$arg" in
+        --claude)
+            EDITION="claude"
+            PLUGIN_FILE="${SCRIPT_DIR}/bashtutor-claude.zsh"
             ;;
-        arm64)
-            echo "Apple Silicon (ARM64)"
-            ;;
-        *)
-            echo "Unknown ($arch)"
+        --uninstall)
+            EDITION="uninstall"
             ;;
     esac
-}
+done
 
-validate_platform() {
-    log_info "Detecting platform..."
-    
-    # Check for macOS
-    if [[ "$(uname -s)" != "Darwin" ]]; then
-        die "BashTutor currently only supports macOS. Detected: $(uname -s)"
-    fi
-    
-    # Check for zsh
-    if [[ "${SHELL##*/}" != "zsh" ]]; then
-        die "BashTutor requires zsh. Current shell: ${SHELL:-unknown}"
-    fi
-    
-    # Verify zsh version (should be 5.0+)
-    local zsh_version
-    zsh_version=$(zsh --version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
-    log_info "zsh version: $zsh_version"
-    
-    local arch
-    arch=$(detect_architecture)
-    log_info "Architecture: $arch"
-}
-
-validate_source_file() {
-    log_info "Validating source plugin..."
-    
-    if [[ ! -f "$SOURCE_PLUGIN" ]]; then
-        die "Source file not found: $SOURCE_PLUGIN
-        Please ensure bashtutor.zsh is in the same directory as install.sh"
-    fi
-    
-    log_info "Source file found: $SOURCE_PLUGIN"
-    
-    # Test zsh syntax
-    log_info "Testing zsh syntax..."
-    if ! zsh -n "$SOURCE_PLUGIN" 2>/dev/null; then
-        die "Syntax error detected in $SOURCE_PLUGIN"
-    fi
-    
-    log_success "Syntax validation passed"
-}
+# Fall back to bashtutor.zsh if edition-specific file doesn't exist
+if [[ "$EDITION" != "uninstall" && ! -f "$PLUGIN_FILE" ]]; then
+    PLUGIN_FILE="${SCRIPT_DIR}/bashtutor.zsh"
+fi
 
 # =============================================================================
-# INSTALLATION
+# COLOURS
 # =============================================================================
 
-create_directories() {
-    log_info "Creating directories..."
-    
-    # Create main directory
-    if [[ -d "$BASHTUTOR_DIR" ]]; then
-        log_warn "Directory already exists: $BASHTUTOR_DIR"
-    else
-        mkdir -p "$BASHTUTOR_DIR"
-        log_success "Created: $BASHTUTOR_DIR"
-    fi
-    
-    # Create subdirectories
-    local subdirs=("cache" "history")
-    for subdir in "${subdirs[@]}"; do
-        local full_path="${BASHTUTOR_DIR}/${subdir}"
-        if [[ -d "$full_path" ]]; then
-            log_warn "Directory already exists: $full_path"
-        else
-            mkdir -p "$full_path"
-            log_success "Created: $full_path"
-        fi
-    done
-}
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-copy_plugin() {
-    log_info "Installing plugin..."
-    
-    local dest="${BASHTUTOR_DIR}/bashtutor.zsh"
-    
-    if [[ -f "$dest" ]]; then
-        log_warn "Plugin already exists, updating..."
-    fi
-    
-    cp "$SOURCE_PLUGIN" "$dest"
-    log_success "Installed: $dest"
-}
-
-create_config() {
-    log_info "Creating default configuration..."
-    
-    local config_file="${BASHTUTOR_DIR}/config"
-    
-    if [[ -f "$config_file" ]]; then
-        log_warn "Config already exists, skipping: $config_file"
-        return 0
-    fi
-    
-    cat > "$config_file" << 'EOF'
-# BashTutor Configuration
-# This file is sourced by bashtutor.zsh
-
-# Auto-explain mode: set to 1 to automatically explain every command
-# BASHTUTOR_AUTO_EXPLAIN=0
-
-# Maximum OpenClaw wait time (seconds)
-# BASHTUTOR_OPENCLAW_TIMEOUT=5
-
-# History file retention (days, 0 = unlimited)
-# BASHTUTOR_HISTORY_RETENTION_DAYS=0
-EOF
-    
-    log_success "Created: $config_file"
-}
-
-add_source_line() {
-    log_info "Configuring shell..."
-    
-    if [[ ! -f "$SOURCE_ZSHRC" ]]; then
-        log_warn "~/.zshrc not found, creating..."
-        touch "$SOURCE_ZSHRC"
-    fi
-    
-    # Check if already sourced (idempotent)
-    if grep -qF "$SOURCE_MARKER" "$SOURCE_ZSHRC" 2>/dev/null; then
-        log_warn "BashTutor already configured in ~/.zshrc"
-        return 0
-    fi
-    
-    # Backup .zshrc
-    cp "$SOURCE_ZSHRC" "$ZSHRC_BACKUP"
-    log_info "Backed up ~/.zshrc to $ZSHRC_BACKUP"
-    
-    # Add source line
-    cat >> "$SOURCE_ZSHRC" << EOF
-
-${SOURCE_MARKER}
-[[ -f "${BASHTUTOR_DIR}/bashtutor.zsh" ]] && source "${BASHTUTOR_DIR}/bashtutor.zsh"
-EOF
-    
-    log_success "Added source line to ~/.zshrc"
-}
+ok()   { echo -e "${GREEN}${BOLD}✅ $*${NC}"; }
+info() { echo -e "${CYAN}🐚 $*${NC}"; }
+warn() { echo -e "${YELLOW}⚠️  $*${NC}"; }
+err()  { echo -e "${RED}❌ $*${NC}" >&2; }
+die()  { err "$1"; exit 1; }
 
 # =============================================================================
-# UNINSTALLATION
+# UNINSTALL
 # =============================================================================
 
 uninstall() {
-    log_info "Uninstalling BashTutor..."
-    
-    local found_something=false
-    
+    info "Uninstalling BashTutor..."
+
     # Remove source line from .zshrc
-    if [[ -f "$SOURCE_ZSHRC" ]]; then
-        if grep -qF "$SOURCE_MARKER" "$SOURCE_ZSHRC" 2>/dev/null; then
-            log_info "Removing source line from ~/.zshrc..."
-            # Create backup
-            cp "$SOURCE_ZSHRC" "${SOURCE_ZSHRC}.uninstall.bak.$(date +%Y%m%d%H%M%S)"
-            # Remove the source line and preceding marker comment
-            sed -i.bashtutor.tmp "/${SOURCE_MARKER//\//\\/}/d" "$SOURCE_ZSHRC" 2>/dev/null || \
-                sed -i "/${SOURCE_MARKER//\//\\/}/d" "$SOURCE_ZSHRC" 2>/dev/null || \
-                grep -vF "$SOURCE_MARKER" "$SOURCE_ZSHRC" > "${SOURCE_ZSHRC}.tmp" && mv "${SOURCE_ZSHRC}.tmp" "$SOURCE_ZSHRC"
-            # Clean up temp files
-            rm -f "${SOURCE_ZSHRC}.bashtutor.tmp" "${SOURCE_ZSHRC}.tmp" 2>/dev/null
-            log_success "Removed source line from ~/.zshrc"
-            found_something=true
-        fi
+    if [[ -f "$ZSHRC" ]] && grep -qF "$SOURCE_MARKER" "$ZSHRC" 2>/dev/null; then
+        cp "$ZSHRC" "${ZSHRC}.uninstall.bak.$(date +%Y%m%d%H%M%S)"
+        # Remove the marker line and the source line after it
+        grep -v "$SOURCE_MARKER" "$ZSHRC" | grep -v "source.*\.bashtutor/bashtutor\.zsh" > "${ZSHRC}.tmp" && \
+            mv "${ZSHRC}.tmp" "$ZSHRC"
+        ok "Removed from ~/.zshrc"
+    else
+        warn "BashTutor not found in ~/.zshrc"
     fi
-    
+
     # Remove plugin directory
     if [[ -d "$BASHTUTOR_DIR" ]]; then
-        log_info "Removing directory: $BASHTUTOR_DIR"
         rm -rf "$BASHTUTOR_DIR"
-        log_success "Removed: $BASHTUTOR_DIR"
-        found_something=true
-    fi
-    
-    if [[ "$found_something" == false ]]; then
-        log_warn "BashTutor doesn't appear to be installed"
+        ok "Removed ~/.bashtutor/"
     else
-        log_success "Uninstallation complete!"
-        echo ""
-        echo "Please restart your terminal or run: source ~/.zshrc"
+        warn "~/.bashtutor/ not found"
     fi
-    
+
+    echo ""
+    ok "BashTutor uninstalled. Restart your terminal to finish."
+    echo ""
     exit 0
+}
+
+# =============================================================================
+# CHECKS
+# =============================================================================
+
+check_platform() {
+    info "Checking your system..."
+
+    [[ "$(uname -s)" == "Darwin" ]] || die "BashTutor only supports macOS right now."
+
+    local shell_name="${SHELL##*/}"
+    [[ "$shell_name" == "zsh" ]] || die "BashTutor needs zsh. Your shell is: ${SHELL}. Switch to zsh in System Settings → Users & Groups."
+
+    local zsh_version
+    zsh_version=$(zsh --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    ok "macOS with zsh ${zsh_version} — good to go"
+}
+
+check_plugin_file() {
+    [[ -f "$PLUGIN_FILE" ]] || die "Plugin file not found: $PLUGIN_FILE
+Make sure install.sh is in the same folder as bashtutor-openclaw.zsh"
+
+    # Syntax check
+    if command -v zsh &>/dev/null; then
+        zsh -n "$PLUGIN_FILE" 2>/dev/null || die "Syntax error in plugin file — try re-downloading from GitHub"
+    fi
+    ok "Plugin file found and valid"
+}
+
+check_ai() {
+    if [[ "$EDITION" == "openclaw" ]]; then
+        if command -v openclaw &>/dev/null; then
+            ok "OpenClaw detected — AI features ready"
+        else
+            warn "OpenClaw not found — BashTutor will use local patterns until you install it"
+        fi
+    elif [[ "$EDITION" == "claude" ]]; then
+        if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+            ok "ANTHROPIC_API_KEY found — Claude AI ready"
+        else
+            warn "ANTHROPIC_API_KEY not set — add it to ~/.zshrc to enable AI:"
+            echo "     export ANTHROPIC_API_KEY=\"sk-ant-...\""
+            echo "     Get a free key at: https://console.anthropic.com"
+        fi
+    fi
+}
+
+# =============================================================================
+# INSTALL
+# =============================================================================
+
+create_dirs() {
+    info "Setting up ~/.bashtutor/ ..."
+    mkdir -p "${BASHTUTOR_DIR}/cache"
+    ok "Created ~/.bashtutor/"
+}
+
+copy_plugin() {
+    info "Installing plugin..."
+    cp "$PLUGIN_FILE" "${BASHTUTOR_DIR}/bashtutor.zsh"
+    chmod 644 "${BASHTUTOR_DIR}/bashtutor.zsh"
+    ok "Installed to ~/.bashtutor/bashtutor.zsh"
+}
+
+create_config() {
+    local config="${BASHTUTOR_DIR}/config"
+    if [[ -f "$config" ]]; then
+        warn "Config already exists — keeping your settings"
+        return
+    fi
+
+    cat > "$config" << 'EOF'
+# BashTutor Configuration
+# Edit these to change how BashTutor behaves
+
+# Auto-explain commands? (0 = off, 1 = on — only explains new/failed commands)
+BASHTUTOR_AUTO_EXPLAIN=0
+
+# Remember AI answers for how long? (hours)
+BASHTUTOR_CACHE_TTL=24
+
+# How many commands to keep in history
+BASHTUTOR_MAX_HISTORY=1000
+
+# Suggest next commands based on your habits? (0 = off, 1 = on)
+BASHTUTOR_SMART_SUGGEST=0
+
+# Show debug info? (0 = off, 1 = on)
+BASHTUTOR_VERBOSE=0
+EOF
+    ok "Created default config at ~/.bashtutor/config"
+}
+
+wire_into_zshrc() {
+    info "Wiring into your shell..."
+
+    # Create ~/.zshrc if it doesn't exist
+    [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
+
+    # Already installed?
+    if grep -qF "$SOURCE_MARKER" "$ZSHRC" 2>/dev/null; then
+        warn "Already in ~/.zshrc — updating the source line"
+        # Remove old lines and re-add cleanly
+        grep -v "$SOURCE_MARKER" "$ZSHRC" | grep -v "source.*\.bashtutor/bashtutor\.zsh" > "${ZSHRC}.tmp" && \
+            mv "${ZSHRC}.tmp" "$ZSHRC"
+    else
+        # Back up .zshrc first
+        cp "$ZSHRC" "$ZSHRC_BACKUP"
+        info "Backed up ~/.zshrc to ${ZSHRC_BACKUP##*/}"
+    fi
+
+    # Add the source line
+    cat >> "$ZSHRC" << EOF
+
+${SOURCE_MARKER}
+[[ -f "\${HOME}/.bashtutor/bashtutor.zsh" ]] && source "\${HOME}/.bashtutor/bashtutor.zsh"
+EOF
+
+    ok "Added to ~/.zshrc — BashTutor will now load every time a terminal opens"
 }
 
 # =============================================================================
@@ -263,88 +226,57 @@ uninstall() {
 
 show_help() {
     cat << EOF
-BashTutor Installer v${SCRIPT_VERSION}
 
-Usage: ./install.sh [OPTIONS]
+${BOLD}BashTutor Installer v${SCRIPT_VERSION}${NC}
 
-Options:
-    --uninstall    Remove BashTutor from the system
-    --help         Show this help message
+Usage:
+  bash install.sh              Install OpenClaw edition (default)
+  bash install.sh --claude     Install Claude API edition
+  bash install.sh --uninstall  Remove BashTutor completely
 
-Description:
-    Installs BashTutor, a zsh plugin that teaches bash through doing.
-    Designed for dyslexic learning patterns.
+After installing:
+  Restart your terminal OR run: source ~/.zshrc
 
-The installer will:
-    - Detect macOS and zsh
-    - Create ~/.bashtutor/ with cache and history subdirectories
-    - Install bashtutor.zsh to ~/.bashtutor/
-    - Add source line to ~/.zshrc (idempotent)
-    - Create default configuration file
-    - Report system architecture
-    - Validate syntax before installing
+Then try:
+  bashme show files modified today
+  bt find all pdfs in downloads
+  Ctrl+B  (explain last command)
 
-After installation, restart your terminal or run: source ~/.zshrc
 EOF
 }
 
 main() {
-    # Parse arguments
-    case "${1:-}" in
-        --uninstall)
-            uninstall
-            ;;
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        "")
-            # Continue with installation
-            ;;
-        *)
-            log_error "Unknown option: $1"
-            show_help
-            exit 1
-            ;;
-    esac
-    
-    echo "🎓 BashTutor Installer v${SCRIPT_VERSION}"
-    echo "===================================="
+    # Handle uninstall
+    [[ "$EDITION" == "uninstall" ]] && uninstall
+
     echo ""
-    
-    # Validate
-    validate_platform
-    validate_source_file
-    
-    # Install
-    create_directories
+    echo -e "${BOLD}${CYAN}🎓 BashTutor Installer v${SCRIPT_VERSION}${NC}"
+    echo -e "${CYAN}   Installing at OS level — loads in every terminal automatically${NC}"
+    echo ""
+
+    check_platform
+    check_plugin_file
+    check_ai
+    create_dirs
     copy_plugin
     create_config
-    add_source_line
-    
-    # Done
+    wire_into_zshrc
+
     echo ""
-    echo "===================================="
-    log_success "BashTutor installed successfully!"
+    echo -e "${BOLD}${GREEN}🎉 Done! BashTutor is installed at OS level.${NC}"
     echo ""
-    echo "Next steps:"
-    echo "  1. Restart your terminal OR run: source ~/.zshrc"
+    echo "  Now activate it in this terminal:"
     echo ""
-    echo "  2. (RECOMMENDED) Set your Anthropic API key for AI-powered explanations:"
-    echo "     export ANTHROPIC_API_KEY=\"sk-ant-...\""
-    echo "     Get a free key at: https://console.anthropic.com/"
+    echo -e "  ${CYAN}source ~/.zshrc${NC}"
     echo ""
-    echo "  3. Try it out:"
-    echo "     bashme show files modified today"
+    echo "  Then try it:"
     echo ""
-    echo "Commands:"
-    echo "  bashme <request>         Get bash command from plain English"
-    echo "  bashtutor_toggle         Toggle auto-explanations"
-    echo "  bashtutor_history        View command history"
-    echo "  bashtutor_help           Show all commands"
+    echo -e "  ${CYAN}bashme show files modified today${NC}"
+    echo -e "  ${CYAN}bt find all pdfs in my downloads${NC}"
+    echo -e "  ${CYAN}Ctrl+B${NC}  — explain the last command"
     echo ""
-    echo "Without ANTHROPIC_API_KEY, BashTutor uses local pattern matching"
-    echo "which works fine for common commands."
+    echo "  To remove BashTutor at any time:"
+    echo -e "  ${CYAN}bash install.sh --uninstall${NC}"
     echo ""
 }
 
