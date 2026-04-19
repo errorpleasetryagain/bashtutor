@@ -1022,6 +1022,8 @@ Rules:
 - For Python tasks (install packages, run scripts, virtual envs, pip): give the correct shell command to do it (e.g. pip3 install X, python3 script.py, python3 -m venv env)
 - For 'write a python script that does X': give a python3 one-liner or the python3 command to run an inline script using -c flag
 - macOS, zsh shell
+- IMPORTANT: Never use bare 'find .' without -maxdepth. Always add -maxdepth 2 or less to avoid scanning the entire home folder. For 'modified today' use: find . -maxdepth 2 -mtime -1 -type f
+- Keep commands short, safe, and scoped to the current directory unless the user specifies otherwise
 
 Task: $request${history_context}
 
