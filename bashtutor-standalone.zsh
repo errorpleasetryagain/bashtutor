@@ -455,6 +455,201 @@ function _bt_lookup() {
             _BT_CMD="./script.sh"
             _BT_NOTE_B="Runs a script in the current folder (must be executable first)"
             _BT_NOTE_I="# chmod +x script.sh to make it executable" ;;
+# FILES — ADVANCED
+        *count*line*|*how*many*line*|*wc\ *|*word*count*|*line*count*)
+            _BT_CMD="wc -l file.txt"
+            _BT_NOTE_B="Counts lines in a file — -w counts words, -c counts characters"
+            _BT_NOTE_I="# -l=lines -w=words -c=chars" ;;
+        *compar*file*|*diff*file*|*differ*file*)
+            _BT_CMD="diff file1.txt file2.txt"
+            _BT_NOTE_B="Shows the differences between two files line by line"
+            _BT_NOTE_I="# < =file1 only > =file2 only" ;;
+        *file*exist*|*check*exist*|*does*file*exist*)
+            _BT_CMD="[[ -f file.txt ]] && echo exists || echo missing"
+            _BT_NOTE_B="Checks if a file exists — use -d for directories"
+            _BT_NOTE_I="# -f=file -d=dir -e=either" ;;
+        *symlink*|*symbolic*link*|*soft*link*|*ln\ *)
+            _BT_CMD="ln -s /path/to/original /path/to/link"
+            _BT_NOTE_B="Creates a shortcut (symlink) that points to another file or folder"
+            _BT_NOTE_I="# -s=symbolic readlink -f shows real path" ;;
+        *newest*file*|*latest*file*|*most*recent*file*|*last*modif*)
+            _BT_CMD="ls -lt | head -5"
+            _BT_NOTE_B="Lists the 5 most recently modified files, newest first"
+            _BT_NOTE_I="# -t=sort by time -r=reverse (oldest first)" ;;
+        *oldest*file*)
+            _BT_CMD="ls -ltr | head -5"
+            _BT_NOTE_B="Lists the 5 oldest files, oldest first"
+            _BT_NOTE_I="# -r=reverse of -t (time sort)" ;;
+        *hidden*file*|*show*dot*file*|*list*hidden*)
+            _BT_CMD="ls -la | grep '^\\.'"
+            _BT_NOTE_B="Lists only hidden files (those starting with a dot)"
+            _BT_NOTE_I="# ls -la shows all, dotfiles start with ." ;;
+        *watch*file*change*|*monitor*file*)
+            _BT_CMD="fswatch -o file.txt | xargs -n1 -I{} echo 'changed'"
+            _BT_NOTE_B="Watches a file and runs a command when it changes (macOS)"
+            _BT_NOTE_I="# brew install fswatch first" ;;
+        *open*finder*|*open*folder*finder*|*reveal*finder*)
+            _BT_CMD="open ."
+            _BT_NOTE_B="Opens the current folder in Finder"
+            _BT_NOTE_I="# open /path/to/folder for any folder" ;;
+        *open*url*|*open*browser*|*launch*url*)
+            _BT_CMD="open https://example.com"
+            _BT_NOTE_B="Opens a URL in your default browser"
+            _BT_NOTE_I="# open also works on files and apps" ;;
+# NETWORKING
+        *ip*address*|*my*ip*|*what*ip*|*ifconfig*|*network*interface*)
+            _BT_CMD="ipconfig getifaddr en0"
+            _BT_NOTE_B="Shows your local IP address (en0=WiFi, en1=Ethernet on Mac)"
+            _BT_NOTE_I="# ifconfig for all interfaces" ;;
+        *public*ip*|*external*ip*)
+            _BT_CMD="curl -s ifconfig.me"
+            _BT_NOTE_B="Shows your public IP address as seen from the internet"
+            _BT_NOTE_I="# requires internet connection" ;;
+        *port*open*|*what*port*|*port*listen*)
+            _BT_CMD="lsof -i -P | grep LISTEN"
+            _BT_NOTE_B="Shows which ports are open and which programs are using them"
+            _BT_NOTE_I="# -i=network -P=port numbers not names" ;;
+        *flush*dns*|*clear*dns*|*dns*cache*)
+            _BT_CMD="sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder"
+            _BT_NOTE_B="Clears the DNS cache on macOS — fixes 'site not found' errors"
+            _BT_NOTE_I="# needs sudo (admin password)" ;;
+        *wifi*network*|*current*wifi*|*connected*wifi*)
+            _BT_CMD="networksetup -getairportnetwork en0"
+            _BT_NOTE_B="Shows which WiFi network you're connected to"
+            _BT_NOTE_I="# en0 is usually the WiFi interface on Mac" ;;
+        *ssh*tunnel*|*forward*port*|*tunnel*)
+            _BT_CMD="ssh -L 8080:localhost:80 user@remote"
+            _BT_NOTE_B="Forwards remote port 80 to your local port 8080 via SSH"
+            _BT_NOTE_I="# -L local:remote -R reverse tunnel" ;;
+        *copy*remote*|*scp*|*send*file*server*)
+            _BT_CMD="scp file.txt user@host:/path/"
+            _BT_NOTE_B="Copies a file to a remote server over SSH"
+            _BT_NOTE_I="# -r for folders scp user@host:file . to download" ;;
+        *local*server*|*http*server*|*web*server*)
+            _BT_CMD="python3 -m http.server 8000"
+            _BT_NOTE_B="Starts a simple web server in the current folder on port 8000"
+            _BT_NOTE_I="# visit http://localhost:8000 in browser" ;;
+# CLIPBOARD & TEXT
+        *copy*clipboard*|*pbcopy*|*clipboard*)
+            _BT_CMD="echo 'text' | pbcopy"
+            _BT_NOTE_B="Copies text to the clipboard — paste anywhere with Cmd+V"
+            _BT_NOTE_I="# cat file.txt | pbcopy to copy a file" ;;
+        *paste*clipboard*|*pbpaste*|*from*clipboard*)
+            _BT_CMD="pbpaste"
+            _BT_NOTE_B="Prints what's currently in your clipboard"
+            _BT_NOTE_I="# pbpaste > file.txt to save to file" ;;
+        *lowercase*|*upper*lower*|*convert*case*)
+            _BT_CMD="echo 'TEXT' | tr '[:upper:]' '[:lower:]'"
+            _BT_NOTE_B="Converts text to lowercase using tr"
+            _BT_NOTE_I="# swap args for uppercase" ;;
+        *trim*whitespace*|*remove*space*|*strip*space*)
+            _BT_CMD="echo '  text  ' | xargs"
+            _BT_NOTE_B="Removes leading and trailing whitespace from text"
+            _BT_NOTE_I="# xargs trims whitespace as a side effect" ;;
+        *string*length*|*length*of*string*)
+            _BT_CMD='str="hello"; echo ${#str}'
+            _BT_NOTE_B="Gets the length of a string using \${#variable}"
+            _BT_NOTE_I="# \${#var} = character count" ;;
+        *base64*encode*|*encode*base64*)
+            _BT_CMD="echo 'text' | base64"
+            _BT_NOTE_B="Encodes text as base64 — used for tokens and file transfers"
+            _BT_NOTE_I="# base64 -d to decode" ;;
+        *random*password*|*generate*password*|*random*string*)
+            _BT_CMD="openssl rand -base64 16"
+            _BT_NOTE_B="Generates a random 16-character password"
+            _BT_NOTE_I="# change 16 for longer/shorter" ;;
+        *math*|*calculat*|*arithmetic*)
+            _BT_CMD="echo $((2 + 2))"
+            _BT_NOTE_B="Does arithmetic in the shell — supports + - * / and %"
+            _BT_NOTE_I="# \$(( expr )) for any math" ;;
+# SYSTEM — macOS
+        *sudo*|*admin*|*run*admin*|*run*root*)
+            _BT_CMD="sudo command"
+            _BT_NOTE_B="Runs a command as admin — it will ask for your password"
+            _BT_NOTE_I="# sudo -i for a full root shell" ;;
+        *shutdown*|*turn*off*|*power*off*)
+            _BT_CMD="sudo shutdown -h now"
+            _BT_NOTE_B="Shuts down the Mac immediately"
+            _BT_NOTE_I="# -h=halt -r=restart +5 in 5 min" ;;
+        *restart*|*reboot*)
+            _BT_CMD="sudo shutdown -r now"
+            _BT_NOTE_B="Restarts the Mac immediately"
+            _BT_NOTE_I="# or: sudo reboot" ;;
+        *sleep*mac*|*sleep*computer*|*put*sleep*)
+            _BT_CMD="pmset sleepnow"
+            _BT_NOTE_B="Puts the Mac to sleep immediately"
+            _BT_NOTE_I="# sudo pmset for system-wide settings" ;;
+        *lock*screen*|*lock*mac*)
+            _BT_CMD="/System/Library/CoreServices/Menu\ Extras/User.menu/Contents/Resources/CGSession -suspend"
+            _BT_NOTE_B="Locks the screen — same as Ctrl+Cmd+Q"
+            _BT_NOTE_I="# or press Ctrl+Cmd+Q" ;;
+        *screenshot*|*screen*capture*|*screen*shot*)
+            _BT_CMD="screencapture ~/Desktop/screenshot.png"
+            _BT_NOTE_B="Takes a screenshot and saves it to your Desktop"
+            _BT_NOTE_I="# -i=interactive -c=clipboard" ;;
+        *empty*trash*|*clear*trash*)
+            _BT_CMD="rm -rf ~/.Trash/*"
+            _BT_NOTE_B="Empties the Trash — WARNING: permanent, no undo"
+            _BT_NOTE_I="# same as Finder empty trash" ;;
+        *force*quit*|*app*not*respond*|*kill*app*)
+            _BT_CMD="pkill -f AppName"
+            _BT_NOTE_B="Force quits an app by name — same as Cmd+Option+Esc"
+            _BT_NOTE_I="# pkill -9 -f AppName for stubborn apps" ;;
+        *mount*drive*|*mount*disk*|*list*mount*|*mounted*drive*)
+            _BT_CMD="diskutil list"
+            _BT_NOTE_B="Lists all mounted drives and partitions on macOS"
+            _BT_NOTE_I="# diskutil info /dev/disk0 for details" ;;
+# PROCESSES & MONITORING
+        *monitor*process*|*watch*process*|*cpu*usage*)
+            _BT_CMD="top -o cpu"
+            _BT_NOTE_B="Shows live CPU usage, sorted by most CPU first"
+            _BT_NOTE_I="# q=quit k=kill process" ;;
+        *check*command*|*command*exist*|*installed*)
+            _BT_CMD="command -v node"
+            _BT_NOTE_B="Checks if a command is installed — shows its path if found"
+            _BT_NOTE_I="# returns nothing if not found" ;;
+        *node*version*|*check*node*)
+            _BT_CMD="node --version"
+            _BT_NOTE_B="Shows which version of Node.js is installed"
+            _BT_NOTE_I="# nvm list to see installed versions" ;;
+        *python*version*|*check*python*)
+            _BT_CMD="python3 --version"
+            _BT_NOTE_B="Shows which version of Python 3 is installed"
+            _BT_NOTE_I="# python3 on macOS, python on Linux" ;;
+        *run*python*|*python*file*|*python*script*)
+            _BT_CMD="python3 script.py"
+            _BT_NOTE_B="Runs a Python script"
+            _BT_NOTE_I="# -m module to run a module" ;;
+        *list*brew*|*installed*package*|*brew*list*)
+            _BT_CMD="brew list"
+            _BT_NOTE_B="Lists all packages installed via Homebrew"
+            _BT_NOTE_I="# brew list --versions to see versions" ;;
+        *install*homebrew*|*get*homebrew*)
+            _BT_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+            _BT_NOTE_B="Installs Homebrew — the macOS package manager"
+            _BT_NOTE_I="# one-line installer from homebrew.sh" ;;
+# SHELL & ENVIRONMENT
+        *what*shell*|*current*shell*|*which*shell*)
+            _BT_CMD="echo $SHELL"
+            _BT_NOTE_B="Shows your current default shell (e.g. /bin/zsh)"
+            _BT_NOTE_I="# echo \$0 shows the running shell" ;;
+        *change*shell*|*default*shell*|*set*shell*)
+            _BT_CMD="chsh -s $(which zsh)"
+            _BT_NOTE_B="Changes your default shell to zsh"
+            _BT_NOTE_I="# log out and back in for it to take effect" ;;
+        *set*variable*|*print*variable*|*echo*variable*)
+            _BT_CMD='VAR="hello"; echo "$VAR"'
+            _BT_NOTE_B="Sets a variable and prints it — use \$ to read a variable"
+            _BT_NOTE_I="# export VAR to share with child processes" ;;
+# CRON
+        *cron*job*|*schedule*task*|*crontab*)
+            _BT_CMD="crontab -e"
+            _BT_NOTE_B="Opens your cron schedule for editing — runs tasks automatically"
+            _BT_NOTE_I="# format: min hour day month weekday command" ;;
+        *list*cron*|*see*cron*|*cron*schedule*)
+            _BT_CMD="crontab -l"
+            _BT_NOTE_B="Lists your current scheduled cron jobs"
+            _BT_NOTE_I="# crontab -r to remove all" ;;
         *help*|*what*can*|*example*)
             _BT_CMD=""
             _bt_help
