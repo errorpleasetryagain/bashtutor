@@ -1705,6 +1705,7 @@ zle -N bashtutor_explain_last 2>/dev/null && \
 
 # Aliases
 alias bt='bashme'
+alias qq='bashme'
 alias btx='bashtutor_toggle'
 alias bth='bashtutor_history'
 alias bts='bashtutor_status'
