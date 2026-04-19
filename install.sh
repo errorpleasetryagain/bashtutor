@@ -11,6 +11,7 @@
 # Usage:
 #   bash install.sh              # install OpenClaw edition (default)
 #   bash install.sh --claude     # install Claude API edition
+#   bash install.sh --standalone # install Standalone edition (no API key needed)
 #   bash install.sh --uninstall  # remove everything
 
 set -euo pipefail
@@ -39,6 +40,9 @@ for arg in "$@"; do
     case "$arg" in
         --claude)
             EDITION="claude"
+            ;;
+        --standalone)
+            EDITION="standalone"
             ;;
         --uninstall)
             EDITION="uninstall"
@@ -166,6 +170,8 @@ check_platform() {
 check_plugin_file() {
     if [[ "$EDITION" == "claude" ]]; then
         PLUGIN_FILE="${SCRIPT_DIR}/bashtutor-claude.zsh"
+    elif [[ "$EDITION" == "standalone" ]]; then
+        PLUGIN_FILE="${SCRIPT_DIR}/bashtutor-standalone.zsh"
     else
         PLUGIN_FILE="${SCRIPT_DIR}/bashtutor-openclaw.zsh"
     fi
@@ -200,6 +206,8 @@ check_ai() {
             echo -e "  Get a free key at: ${CYAN}https://console.anthropic.com${NC}"
             echo ""
         fi
+    elif [[ "$EDITION" == "standalone" ]]; then
+        ok "Standalone edition — no API key needed"
     fi
 }
 
@@ -286,6 +294,7 @@ main() {
     echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${CYAN}  Installing at OS level — loads in every terminal automatically${NC}"
+    echo -e "${WHITE}  Edition: ${BOLD}${EDITION}${NC}"
     echo ""
 
     # If running via curl, download files first
