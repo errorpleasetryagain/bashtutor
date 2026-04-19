@@ -1734,15 +1734,31 @@ _bashtutor_setup
 # Welcome message (once per session)
 if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo ""
-    echo "${_BT_BOLD}${_BT_CYAN}🎓 BashTutor ${BASHTUTOR_VERSION}${_BT_RESET} ${_BT_WHITE}— Claude Edition 🤖${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ██████╗  █████╗ ███████╗██╗  ██╗${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ██╔══██╗██╔══██╗██╔════╝██║  ██║${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ██████╔╝███████║███████╗███████║${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ██╔══██╗██╔══██║╚════██║██╔══██║${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ██████╔╝██║  ██║███████║██║  ██║${_BT_RESET}"
+    echo "${_BT_CYAN}${_BT_BOLD}  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}  ████████╗██╗   ██╗████████╗ ██████╗ ██████╗ ${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}     ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ██║   ██║   ██║   ██║   ██║██████╔╝${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}     ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
+    echo "${_BT_MAGENTA}${_BT_BOLD}     ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
+    echo ""
+    echo "  ${_BT_WHITE}${_BT_BOLD}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_BLUE}🤖 Claude Edition${_BT_RESET}  ${_BT_WHITE}bash for humans${_BT_RESET}"
+    echo ""
 
     if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        echo "   ${_BT_GREEN}✅ Claude API ready${_BT_RESET}"
+        echo "  ${_BT_GREEN}✅ Claude API ready${_BT_RESET}   ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
     else
-        echo "   ${_BT_YELLOW}⚠️  No API key — running in local mode${_BT_RESET}"
+        echo "  ${_BT_YELLOW}⚠️  No API key — running in local mode${_BT_RESET}"
+        echo "  ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
     fi
 
-    echo "   Type ${_BT_BOLD}${_BT_CYAN}bashme${_BT_RESET} to get started, or ${_BT_BOLD}${_BT_MAGENTA}Ctrl+B${_BT_RESET} to explain your last command"
+    echo ""
+    echo "  ${_BT_CYAN}bashme${_BT_RESET} plain english   ${_BT_MAGENTA}Ctrl+B${_BT_RESET} explain last   ${_BT_WHITE}cmd + what?${_BT_RESET} explain anything"
     echo ""
     export BASHTUTOR_WELCOME_SHOWN="1"
 fi
