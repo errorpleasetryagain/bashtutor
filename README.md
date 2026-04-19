@@ -1,11 +1,11 @@
 # 🎓 BashTutor
 
-A macOS zsh plugin that teaches bash through doing — designed for dyslexic learning patterns. Type plain English, get bash commands. Run them, get plain English explanations. It watches your habits and gets smarter over time.
+A macOS zsh plugin that teaches bash through doing — designed for dyslexic learning patterns. Type plain English, get bash commands. Run them, get plain English explanations.
 
 Three editions:
 - **OpenClaw** — uses your local OpenClaw AI (default, no API key needed)
 - **Claude** — uses the Anthropic Claude API
-- **Standalone** — no AI dependency, works entirely offline with local patterns
+- **Standalone** — no AI at all, works entirely offline with a built-in pattern library
 
 ---
 
@@ -17,41 +17,38 @@ Paste this into any terminal — it handles everything:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)"
 ```
 
-This will:
-- Check you have macOS and zsh (and tell you how to get them if not)
-- Clone BashTutor to `~/.bashtutor/`
+The installer will:
+- Check you have macOS and zsh (with platform-specific install instructions if not)
+- Download BashTutor and install the plugin to `~/.bashtutor/`
 - Wire it into your shell so it loads every time a terminal opens
-- Activate it immediately
+- Run a syntax check and report pass/fail
 
-Then restart your terminal or run:
-```bash
-source ~/.zshrc
-```
+Then **open a new terminal** (or run `source ~/.zshrc`).
 
-**Claude API edition** (uses Anthropic AI instead of OpenClaw):
+---
+
+### Claude API edition
+
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)" -- --claude
 ```
 
 You'll also need an API key — get one free at [console.anthropic.com](https://console.anthropic.com), then add it:
+
 ```bash
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc && source ~/.zshrc
 ```
 
-**Standalone edition** (no AI, fully offline):
+### Standalone edition (no AI, fully offline)
+
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)" -- --standalone
 ```
 
-**Don't have zsh?** Run this first:
-```bash
-brew install zsh && chsh -s $(which zsh)
-```
-Then open a new terminal and run the install command above.
+### Other install flags
 
-**Don't have Homebrew?** Run this first:
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+bash install.sh --uninstall   # remove everything cleanly
 ```
 
 ---
@@ -68,55 +65,57 @@ brew install bashtutor
 ## 🚀 What It Does
 
 ### Plain English → bash command
+
 ```bash
 qq show files modified today
 qq find all pdfs in downloads
+qq kill whatever is using port 3000
+qq create a python virtual environment
 ```
-`qq` is the main shortcut. `bt` and `bashme` also work.
+
+`qq` is the main shortcut. `bt` and `bashme` also work. After a result appears, BashTutor asks `Run it? [y/N]` — press `y` to run the command directly.
+
+### Three response levels
+
+```bash
+qq level beginner       # plain English explanation + command (default)
+qq level intermediate   # command + short technical note
+qq level expert         # command only
+```
+
+Level is saved between sessions.
 
 ### Ghost autocomplete while you type
-As you type, grey suggestion text appears based on your history. Press `→` or `Tab` to accept it. Works like Fish shell — no configuration needed. Gets smarter the more you use it.
+
+As you type, grey suggestion text appears based on your command history. Press `→` or `Tab` to accept it. Works like Fish shell — no configuration needed. Ghost text activates after just one character.
 
 ### Explain any command
-```bash
-Ctrl+B                              # explain the last command you ran
-```
 
-### "what?" mode — paste anything and ask
 ```bash
-qq find . -name "*.log" -mtime +7 -delete what?
-# → Plain English explanation of what that command does
+Ctrl+B    # explain the last command you ran
 ```
-
-### Smart explanations
-BashTutor watches what you run. It only explains commands that are new to you, failed, or look risky — not ones you already know.
 
 ### Destructive command safety net
+
 ```bash
-rm -rf somefolder    # BashTutor warns you before this runs
+rm -rf somefolder    # BashTutor warns before this runs, asks for confirmation
 ```
 
-### Python support
-```bash
-qq install pandas
-qq run my script
-qq create a virtual environment
-```
+Catches: `rm -rf`, `dd if=`, `mkfs`, `shred`, `chmod -R 777` — even if typed with leading spaces.
 
 ---
 
-## 💡 All Commands
+## 💡 Commands
 
 | Command | What it does |
 |---------|-------------|
-| `qq <english>` | Translate plain English to bash (main shortcut) |
-| `bt <english>` | Same as qq |
-| `bashme <english>` | Same as qq (full name) |
+| `qq <english>` | Translate plain English to bash |
+| `bt <english>` | Same as `qq` |
+| `bashme <english>` | Same as `qq` |
+| `qq level beginner\|intermediate\|expert` | Change response detail level |
+| `qq help` | Show usage and examples |
 | `Ctrl+B` | Explain the last command you ran |
-| `btx <command>` | Explain any specific command |
-| `bth` | Show your BashTutor command history |
-| `bashtutor_status` | Show plugin status and config |
-| `bashtutor_clear_cache` | Clear the AI response cache |
+| `→` or `Tab` | Accept ghost text suggestion |
 
 ---
 
@@ -125,7 +124,7 @@ qq create a virtual environment
 Edit `~/.bashtutor/config`:
 
 ```bash
-# Auto-explain commands? (0 = off, 1 = on — only explains new/failed commands)
+# Auto-explain commands? (0 = off, 1 = on)
 BASHTUTOR_AUTO_EXPLAIN=0
 
 # Remember AI answers for how long? (hours)
@@ -145,18 +144,18 @@ BASHTUTOR_VERBOSE=0
 
 ## 🛠️ Troubleshooting
 
-**`command not found: bashme`**
-Run `source ~/.zshrc` or restart your terminal.
+**`command not found: qq`**  
+Run `source ~/.zshrc` or open a new terminal window.
 
-**Explanations are slow**
-If using the Claude edition, check your API key: `echo $ANTHROPIC_API_KEY`
+**Claude edition: explanations are slow or not working**  
+Check your API key is set: `echo $ANTHROPIC_API_KEY`  
 BashTutor falls back to local patterns automatically if the API is unavailable.
 
-**Ghost text not appearing**
-Ghost text needs at least 2 characters typed. It learns from your history so it gets better the more you use it.
+**OpenClaw edition: "openclaw not found"**  
+BashTutor uses its built-in local pattern library until you install OpenClaw. All core commands still work.
 
-**OpenClaw not found**
-BashTutor will use local patterns offline. Install OpenClaw separately to enable AI features for the OpenClaw edition.
+**Ghost text not appearing**  
+Ghost text learns from your shell history. The more you use the terminal, the more suggestions appear. It activates after typing just one character.
 
 ---
 
@@ -168,17 +167,13 @@ BashTutor will use local patterns offline. Install OpenClaw separately to enable
 
 ---
 
-## 📁 Files
+## 📁 Files installed
 
 ```
 ~/.bashtutor/
-├── bashtutor-openclaw.zsh    # OpenClaw edition (copied here by installer)
-├── bashtutor-claude.zsh      # Claude API edition
-├── bashtutor-standalone.zsh  # Standalone / offline edition
-├── config                    # your settings
-├── history.jsonl             # command history
-├── sequences                 # learned command patterns (powers ghost text)
-└── cache/                    # AI response cache
+├── bashtutor.zsh    # active plugin (whichever edition you chose)
+├── config           # your settings
+└── cache/           # AI response cache
 ```
 
 ---
