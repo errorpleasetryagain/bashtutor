@@ -47,9 +47,10 @@ brew install bashtutor
 
 ### Plain English → bash command
 ```bash
-bashme show files modified today
-bt find all pdfs in downloads        # bt is a shortcut for bashme
+qq show files modified today
+qq find all pdfs in downloads
 ```
+`qq` is the main shortcut. `bt` and `bashme` also work.
 
 ### Ghost autocomplete while you type
 As you type, grey suggestion text appears based on your history. Press `→` or `Tab` to accept it. Works like Fish shell — no configuration needed. Gets smarter the more you use it.
@@ -61,7 +62,7 @@ Ctrl+B                              # explain the last command you ran
 
 ### "what?" mode — paste anything and ask
 ```bash
-bashme find . -name "*.log" -mtime +7 -delete what?
+qq find . -name "*.log" -mtime +7 -delete what?
 # → Plain English explanation of what that command does
 ```
 
@@ -75,9 +76,9 @@ rm -rf somefolder    # BashTutor warns you before this runs
 
 ### Python support
 ```bash
-bashme install pandas
-bashme run my script
-bashme create a virtual environment
+qq install pandas
+qq run my script
+qq create a virtual environment
 ```
 
 ---
@@ -86,8 +87,9 @@ bashme create a virtual environment
 
 | Command | What it does |
 |---------|-------------|
-| `bashme <english>` | Translate plain English to bash |
-| `bt <english>` | Shortcut for bashme |
+| `qq <english>` | Translate plain English to bash (main shortcut) |
+| `bt <english>` | Same as qq |
+| `bashme <english>` | Same as qq (full name) |
 | `Ctrl+B` | Explain the last command you ran |
 | `btx <command>` | Explain any specific command |
 | `bth` | Show your BashTutor command history |
