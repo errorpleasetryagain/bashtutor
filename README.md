@@ -2,9 +2,10 @@
 
 A macOS zsh plugin that teaches bash through doing — designed for dyslexic learning patterns. Type plain English, get bash commands. Run them, get plain English explanations. It watches your habits and gets smarter over time.
 
-Two editions:
+Three editions:
 - **OpenClaw** — uses your local OpenClaw AI (default, no API key needed)
 - **Claude** — uses the Anthropic Claude API
+- **Standalone** — no AI dependency, works entirely offline with local patterns
 
 ---
 
@@ -35,6 +36,11 @@ source ~/.zshrc
 You'll also need an API key — get one free at [console.anthropic.com](https://console.anthropic.com), then add it:
 ```bash
 echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.zshrc && source ~/.zshrc
+```
+
+**Standalone edition** (no AI, fully offline):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/errorpleasetryagain/bashtutor/main/install.sh)" -- --standalone
 ```
 
 **Don't have zsh?** Run this first:
@@ -158,7 +164,7 @@ BashTutor will use local patterns offline. Install OpenClaw separately to enable
 
 - macOS (Intel or Apple Silicon)
 - zsh 5.0+
-- OpenClaw CLI (OpenClaw edition) or Anthropic API key (Claude edition)
+- OpenClaw CLI (OpenClaw edition), Anthropic API key (Claude edition), or nothing (Standalone edition)
 
 ---
 
@@ -166,11 +172,13 @@ BashTutor will use local patterns offline. Install OpenClaw separately to enable
 
 ```
 ~/.bashtutor/
-├── bashtutor.zsh       # the plugin (copied here by installer)
-├── config              # your settings
-├── history.jsonl       # command history
-├── sequences           # learned command patterns (powers ghost text)
-└── cache/              # AI response cache
+├── bashtutor-openclaw.zsh    # OpenClaw edition (copied here by installer)
+├── bashtutor-claude.zsh      # Claude API edition
+├── bashtutor-standalone.zsh  # Standalone / offline edition
+├── config                    # your settings
+├── history.jsonl             # command history
+├── sequences                 # learned command patterns (powers ghost text)
+└── cache/                    # AI response cache
 ```
 
 ---
