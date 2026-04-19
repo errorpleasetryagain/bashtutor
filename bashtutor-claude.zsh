@@ -21,39 +21,91 @@ mkdir -p "$BASHTUTOR_DIR" 2>/dev/null
 [[ -z "$BASHTUTOR_LEVEL" ]] && BASHTUTOR_LEVEL="beginner"
 
 # ── colours ───────────────────────────────────────────────────────────────────
-if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null 2>&1; then
-    _R=$(tput sgr0); _B=$(tput bold)
-    _CY=$(tput setaf 6); _GR=$(tput setaf 2); _YE=$(tput setaf 3)
-    _MG=$(tput setaf 5); _RE=$(tput setaf 1); _BL=$(tput setaf 4)
+if [[ -t 1 ]]; then
+    _OR=$(printf '\033[38;5;202m')   # orange — commands, prompts
+    _DG=$(printf '\033[38;5;22m')    # dark green — success, level
+    _GH=$(printf '\033[38;5;240m')   # grey — ghost text
+    _CY=$(printf '\033[0;36m')       # cyan — notes, explanations
+    _RE=$(printf '\033[0;31m')       # red — warnings
+    _B=$(printf '\033[1m')           # bold
+    _R=$(printf '\033[0m')           # reset
 else
-    _R="" _B="" _CY="" _GR="" _YE="" _MG="" _RE="" _BL=""
+    _OR="" _DG="" _GH="" _CY="" _RE="" _B="" _R=""
 fi
 
-_bt_cmd()  { printf "${_BL}${_B}  %s${_R}\n" "$*"; }
+_bt_cmd()  { printf "${_OR}${_B}  %s${_R}\n" "$*"; }
 _bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
-_bt_warn() { printf "${_YE}  ⚠  %s${_R}\n" "$*"; }
+_bt_warn() { printf "${_RE}  ⚠  %s${_R}\n" "$*"; }
 _bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
 # ── boot line ─────────────────────────────────────────────────────────────────
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-    printf "${_CY}${_B}❯ BashTutor${_R} ${_GR}[claude·%s]${_R}  type ${_BL}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+    printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}[claude·%s]${_R}  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
 else
-    printf "${_CY}${_B}❯ BashTutor${_R} ${_YE}[local·%s]${_R}  set ANTHROPIC_API_KEY for AI\n" "$BASHTUTOR_LEVEL"
+    printf "${_OR}${_B}❯ BashTutor${_R} ${_RE}[local·%s]${_R}  set ANTHROPIC_API_KEY for AI\n" "$BASHTUTOR_LEVEL"
 fi
 
-# ── ghost complete from history (Ctrl+F) ──────────────────────────────────────
-function _bt_history_complete() {
+# ── fish-style predictive ghost text ─────────────────────────────────────────
+typeset -g _BT_GHOST=""
+
+function _bt_ghost_update() {
     local prefix="$BUFFER"
-    [[ -z "$prefix" ]] && return
+    _BT_GHOST=""
+    [[ ${#prefix} -lt 2 ]] && { zle -R; return; }
     local match
-    match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${prefix}") || return
-    [[ -z "$match" || "$match" == "$prefix" ]] && return
-    BUFFER="$match"
-    CURSOR=${#BUFFER}
-    zle redisplay
+    match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${(q)prefix}" | sed 's/^[0-9 \t]*//')
+    [[ -n "$match" && "$match" != "$prefix" ]] && _BT_GHOST="${match#$prefix}"
+    zle -R
 }
-zle -N _bt_history_complete
-bindkey '^F' _bt_history_complete
+
+function _bt_ghost_render() {
+    region_highlight=()
+    [[ -z "$_BT_GHOST" ]] && return
+    local ghost_start=${#BUFFER}
+    local ghost_end=$(( ghost_start + ${#_BT_GHOST} ))
+    POSTDISPLAY="$_BT_GHOST"
+    region_highlight+=("$ghost_start $ghost_end fg=240,bold")
+}
+
+function _bt_ghost_accept() {
+    [[ -z "$_BT_GHOST" ]] && { zle forward-char; return; }
+    BUFFER="${BUFFER}${_BT_GHOST}"
+    CURSOR=${#BUFFER}
+    POSTDISPLAY=""
+    _BT_GHOST=""
+    zle -R
+}
+
+zle -N _bt_ghost_update
+zle -N _bt_ghost_render
+zle -N _bt_ghost_accept
+
+autoload -Uz add-zle-hook-widget 2>/dev/null
+add-zle-hook-widget line-pre-redraw _bt_ghost_render
+add-zle-hook-widget keymap-select _bt_ghost_update
+
+bindkey '^[[C' _bt_ghost_accept   # right arrow accepts
+bindkey '^I' _bt_ghost_accept     # Tab accepts
+
+function _bt_self_insert_ghost() {
+    zle .self-insert
+    _bt_ghost_update
+}
+zle -N self-insert _bt_self_insert_ghost
+
+# ── ascii cat reactions ───────────────────────────────────────────────────────
+function _bt_cat_happy() {
+    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
+    printf "${_OR} /\\_/\\ \n${_OR}( o.o )\n${_OR} > ^ < ${_R}\n"
+}
+function _bt_cat_thinking() {
+    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
+    printf "${_OR} /\\_/\\ \n${_OR}( -.- )\n${_OR} > ? < ${_R}\n"
+}
+function _bt_cat_warn() {
+    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
+    printf "${_OR} /\\_/\\ \n${_OR}( o_o )\n${_OR} > ! < ${_R}\n"
+}
 
 # ── destructive command warning ───────────────────────────────────────────────
 function _bt_preexec() {
@@ -61,6 +113,7 @@ function _bt_preexec() {
     local cmd="$1"
     case "$cmd" in
         rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
+            _bt_cat_warn
             printf "${_RE}${_B}  ⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
             read -r _bt_ans
             [[ "$_bt_ans" != [yY] ]] && return 1
@@ -171,6 +224,7 @@ function _bt_display_ai() {
     cmd=$(echo "$raw" | grep '^COMMAND:' | sed 's/^COMMAND: *//')
     [[ -z "$cmd" ]] && { _bt_err "Unexpected response format"; echo "$raw"; return 1; }
 
+    _bt_cat_happy
     echo ""
     case "$level" in
         beginner)
@@ -196,6 +250,7 @@ function _bt_display_ai() {
 # ── display local response ────────────────────────────────────────────────────
 function _bt_display_local() {
     local level="${BASHTUTOR_LEVEL:-beginner}"
+    _bt_cat_happy
     echo ""
     case "$level" in
         beginner)
@@ -225,7 +280,7 @@ function qq() {
             beginner|intermediate|expert)
                 BASHTUTOR_LEVEL="$2"
                 echo "BASHTUTOR_LEVEL=$2" > "$BASHTUTOR_CONFIG"
-                printf "${_GR}  Level: %s${_R}\n" "$2"
+                printf "${_DG}  Level: %s${_R}\n" "$2"
                 return 0 ;;
             *)
                 _bt_err "Level must be: beginner, intermediate, or expert"
@@ -247,6 +302,7 @@ function qq() {
     fi
 
     _bt_local_lookup "$query" || {
+        _bt_cat_thinking
         _bt_err "No pattern found for: $query"
         printf "${_CY}  Try rephrasing — or: man <command>${_R}\n"
         return 1
@@ -284,7 +340,7 @@ BASHTUTOR_EXPLANATIONS=(
 function _bt_explain_last() {
     local cmd="${_BT_LAST_CMD:-$(fc -ln -1 2>/dev/null | sed 's/^ *//')}"
     if [[ -z "$cmd" ]]; then
-        printf "\n${_YE}  No previous command${_R}\n"
+        printf "\n${_RE}  No previous command${_R}\n"
         zle redisplay 2>/dev/null
         return
     fi
@@ -298,7 +354,7 @@ function _bt_explain_last() {
     fi
     [[ -z "$expl" ]] && expl="Ran: $base"
 
-    printf "\n${_CY}  ❯ %s${_R}\n${_BL}  %s${_R}\n\n" "$cmd" "$expl"
+    printf "\n${_CY}  ❯ %s${_R}\n${_OR}  %s${_R}\n\n" "$cmd" "$expl"
     zle redisplay 2>/dev/null
 }
 zle -N _bt_explain_last
@@ -307,8 +363,8 @@ bindkey '^B' _bt_explain_last
 # ── help screen ───────────────────────────────────────────────────────────────
 function _bt_help() {
     local ai_status
-    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && ai_status="${_GR}claude${_R}" || ai_status="${_YE}local fallback${_R}"
-    printf "\n${_CY}${_B}❯ BashTutor${_R}  Level: ${_YE}%s${_R}  AI: %s\n\n" "$BASHTUTOR_LEVEL" "$ai_status"
+    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && ai_status="${_DG}claude${_R}" || ai_status="${_RE}local fallback${_R}"
+    printf "\n${_OR}${_B}❯ BashTutor${_R}  Level: ${_DG}%s${_R}  AI: %s\n\n" "$BASHTUTOR_LEVEL" "$ai_status"
     printf "${_B}Usage:${_R}\n"
     printf "  qq <question>           ask in plain English\n"
     printf "  bt <question>           same, shorter alias\n"
@@ -318,16 +374,16 @@ function _bt_help() {
     printf "  qq level expert\n"
     printf "\n${_B}Keybindings:${_R}\n"
     printf "  Ctrl+B                  explain last command\n"
-    printf "  Ctrl+F                  complete from history\n"
+    printf "  Right arrow / Tab       accept ghost suggestion\n"
     printf "\n${_B}Examples:${_R}\n"
     printf "  qq list files by size\n"
     printf "  qq find large files\n"
     printf "  qq git save and push\n"
     printf "  qq run a script in the background\n"
     printf "\n${_B}Levels:${_R}\n"
-    printf "  ${_YE}beginner${_R}      plain English + command\n"
-    printf "  ${_YE}intermediate${_R}  command + brief note\n"
-    printf "  ${_YE}expert${_R}        command only\n\n"
+    printf "  ${_DG}beginner${_R}      plain English + command\n"
+    printf "  ${_DG}intermediate${_R}  command + brief note\n"
+    printf "  ${_DG}expert${_R}        command only\n\n"
 }
 
 # ── hooks & aliases ───────────────────────────────────────────────────────────
