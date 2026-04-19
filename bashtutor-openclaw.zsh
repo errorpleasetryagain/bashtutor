@@ -372,6 +372,7 @@ function _bashtutor_setup() {
     _bashtutor_load_config
     _bashtutor_load_explanations
     _bashtutor_check_ai
+    _bashtutor_zle_ghost_setup 2>/dev/null || true
 }
 
 function _bashtutor_create_default_config() {
@@ -1451,6 +1452,233 @@ function _bashtutor_cache_clean_expired() {
 }
 
 trap '_bashtutor_cleanup' EXIT 2>/dev/null || true
+
+# =============================================================================
+# GHOST AUTOCOMPLETE (zsh-autosuggestions integration + pure ZLE fallback)
+# =============================================================================
+#
+# How it works:
+#   - If zsh-autosuggestions is installed: BashTutor feeds its learned
+#     sequences into the suggestion source, so ghost text reflects YOUR habits
+#   - If not installed: BashTutor implements its own grey ghost text via ZLE
+#   - Either way: grey suggestion appears as you type, press → or Tab to accept
+#   - Suggestions come from: your sequence history, then zsh history
+
+# Override zsh-autosuggestions strategy to include BashTutor sequences
+function _bashtutor_suggest_from_sequences() {
+    local prefix="$1"
+    [[ -z "$prefix" ]] && return 1
+    [[ ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return 1
+
+    local base_prefix
+    base_prefix=$(echo "$prefix" | awk '{print $1}' 2>/dev/null)
+    [[ -z "$base_prefix" ]] && return 1
+
+    # Find the most common next command after prefix's base command
+    local next
+    next=$(grep "^${base_prefix}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
+        awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | awk 'NR==1{print $2}')
+
+    [[ -n "$next" ]] && { typeset -g REPLY="$next"; return 0; }
+    return 1
+}
+
+# Pure ZLE ghost text implementation (no zsh-autosuggestions needed)
+# Shows grey suggestion after cursor as you type
+function _bashtutor_zle_ghost_setup() {
+    # Only set up if zsh-autosuggestions is NOT already handling this
+    if (( ${+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )); then
+        # zsh-autosuggestions is loaded — hook into it instead
+        _bashtutor_hook_autosuggestions
+        return 0
+    fi
+
+    # Pure ZLE implementation
+    autoload -Uz add-zsh-hook 2>/dev/null || return 0
+
+    # Ghost text state
+    typeset -g _BT_GHOST_TEXT=""
+    typeset -g _BT_GHOST_ACTIVE=0
+
+    # Highlight style for ghost text — grey
+    typeset -g ZLE_RPROMPT_INDENT=0
+
+    function _bashtutor_ghost_update() {
+        local buf="$BUFFER"
+        _BT_GHOST_TEXT=""
+        _BT_GHOST_ACTIVE=0
+
+        [[ -z "$buf" ]] && { zle -R; return; }
+        [[ ${#buf} -lt 2 ]] && { zle -R; return; }
+
+        local suggestion=""
+
+        # Source 1: BashTutor sequence learning
+        if [[ -f "$BASHTUTOR_SEQUENCES_FILE" ]]; then
+            local base_cmd
+            base_cmd=$(echo "$buf" | awk '{print $1}' 2>/dev/null)
+            if [[ -n "$base_cmd" ]]; then
+                local seq_match
+                seq_match=$(grep "^${base_cmd}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
+                    awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | \
+                    awk 'NR==1 && $1>=2 {print $2}')
+                [[ -n "$seq_match" ]] && suggestion="$seq_match"
+            fi
+        fi
+
+        # Source 2: zsh history (most recent matching entry)
+        if [[ -z "$suggestion" ]]; then
+            local hist_match
+            hist_match=$(fc -l 1 2>/dev/null | \
+                awk -v prefix="$buf" 'index($0, prefix)==1 {found=$0} END {print found}' | \
+                sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' 2>/dev/null)
+            # Only suggest if it's longer than what's typed
+            if [[ -n "$hist_match" && "$hist_match" != "$buf" && ${#hist_match} -gt ${#buf} ]]; then
+                suggestion="$hist_match"
+            fi
+        fi
+
+        # Source 3: BashTutor seen_commands (commands user has run before)
+        if [[ -z "$suggestion" && -f "$BASHTUTOR_SEEN_COMMANDS_FILE" ]]; then
+            local seen_match
+            seen_match=$(grep "^${buf}" "$BASHTUTOR_SEEN_COMMANDS_FILE" 2>/dev/null | head -1)
+            if [[ -n "$seen_match" && "$seen_match" != "$buf" ]]; then
+                suggestion="$seen_match"
+            fi
+        fi
+
+        if [[ -n "$suggestion" && "$suggestion" != "$buf" ]]; then
+            # Show ghost text — the part after what's already typed
+            if [[ "$suggestion" == "$buf"* ]]; then
+                _BT_GHOST_TEXT="${suggestion#$buf}"
+            else
+                _BT_GHOST_TEXT=" → $suggestion"
+            fi
+            _BT_GHOST_ACTIVE=1
+
+            # Display ghost text in grey after cursor using region_highlight
+            local ghost_start=${#BUFFER}
+            local ghost_end=$(( ghost_start + ${#_BT_GHOST_TEXT} ))
+
+            # Temporarily append ghost text to buffer for display only
+            BUFFER="${BUFFER}${_BT_GHOST_TEXT}"
+            CURSOR=$ghost_start
+            region_highlight=("$ghost_start $ghost_end fg=8,bold")
+        else
+            _BT_GHOST_TEXT=""
+            _BT_GHOST_ACTIVE=0
+            region_highlight=()
+        fi
+
+        zle -R
+    }
+
+    # Accept ghost suggestion with → (right arrow) or Tab
+    function _bashtutor_ghost_accept() {
+        if [[ $_BT_GHOST_ACTIVE -eq 1 && -n "$_BT_GHOST_TEXT" ]]; then
+            # Ghost text is already in BUFFER — just move cursor to end
+            CURSOR=${#BUFFER}
+            region_highlight=()
+            _BT_GHOST_TEXT=""
+            _BT_GHOST_ACTIVE=0
+            zle -R
+        else
+            # No ghost text — do normal forward-char or tab-complete
+            if [[ "$WIDGET" == "bashtutor-ghost-accept-tab" ]]; then
+                zle expand-or-complete
+            else
+                zle forward-char
+            fi
+        fi
+    }
+
+    # On any keypress — strip ghost text from buffer first, then update
+    function _bashtutor_ghost_self_insert() {
+        if [[ $_BT_GHOST_ACTIVE -eq 1 && -n "$_BT_GHOST_TEXT" ]]; then
+            # Remove ghost text before inserting new character
+            BUFFER="${BUFFER%${_BT_GHOST_TEXT}}"
+            region_highlight=()
+            _BT_GHOST_TEXT=""
+            _BT_GHOST_ACTIVE=0
+        fi
+        zle self-insert
+        _bashtutor_ghost_update
+    }
+
+    # Escape/delete clears ghost
+    function _bashtutor_ghost_clear() {
+        if [[ $_BT_GHOST_ACTIVE -eq 1 ]]; then
+            BUFFER="${BUFFER%${_BT_GHOST_TEXT}}"
+            region_highlight=()
+            _BT_GHOST_TEXT=""
+            _BT_GHOST_ACTIVE=0
+            zle -R
+        fi
+        zle "$@" 2>/dev/null || true
+    }
+
+    # Register ZLE widgets
+    zle -N bashtutor-ghost-update _bashtutor_ghost_update
+    zle -N bashtutor-ghost-accept _bashtutor_ghost_accept
+    zle -N bashtutor-ghost-accept-tab _bashtutor_ghost_accept
+    zle -N bashtutor-ghost-self-insert _bashtutor_ghost_self_insert
+
+    # Key bindings
+    bindkey '^[[C' bashtutor-ghost-accept        # → right arrow accepts
+    bindkey '^[OC' bashtutor-ghost-accept        # → right arrow (alternate)
+    bindkey '^I'   bashtutor-ghost-accept-tab    # Tab accepts
+    bindkey -M main '^[^[[C' forward-word        # Alt+→ still moves word
+
+    # Hook into ZLE to update ghost on every keypress
+    autoload -Uz add-zsh-hook
+    add-zsh-hook zle-line-init _bashtutor_ghost_update 2>/dev/null || true
+
+    # Override self-insert for printable chars
+    # (We do this carefully to avoid breaking things)
+    if zle -l self-insert &>/dev/null; then
+        bindkey -M main ' '  bashtutor-ghost-self-insert
+        # For letter keys — use zle-keymap-select hook approach instead
+        # to avoid having to bind every character individually
+        function zle-line-pre-redraw() {
+            [[ -n "$KEYS" && "$KEYS" != $'\t' && "$KEYS" != $'\r' ]] && \
+                _bashtutor_ghost_update 2>/dev/null || true
+        }
+        zle -N zle-line-pre-redraw
+    fi
+}
+
+# Hook into zsh-autosuggestions if it's already loaded
+function _bashtutor_hook_autosuggestions() {
+    # Add BashTutor as an additional suggestion strategy
+    # zsh-autosuggestions checks ZSH_AUTOSUGGEST_STRATEGY array in order
+    if (( ${+ZSH_AUTOSUGGEST_STRATEGY} )); then
+        # Prepend bashtutor strategy
+        ZSH_AUTOSUGGEST_STRATEGY=(bashtutor_sequences "${ZSH_AUTOSUGGEST_STRATEGY[@]}")
+    else
+        ZSH_AUTOSUGGEST_STRATEGY=(bashtutor_sequences history completion)
+    fi
+
+    # Register our strategy function
+    # zsh-autosuggestions calls _zsh_autosuggest_strategy_<name> with buffer as $1
+    function _zsh_autosuggest_strategy_bashtutor_sequences() {
+        local buf="$1"
+        [[ -z "$buf" || ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return
+
+        local base_cmd
+        base_cmd=$(echo "$buf" | awk '{print $1}')
+        [[ -z "$base_cmd" ]] && return
+
+        local next
+        next=$(grep "^${base_cmd}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
+            awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | \
+            awk 'NR==1 && $1>=2 {print $2}')
+
+        [[ -n "$next" ]] && typeset -g suggestion="$next"
+    }
+
+    # Make it a soft grey (matches standard zsh-autosuggestions style)
+    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-fg=8}"
+}
 
 # =============================================================================
 # REGISTER HOOKS, KEYBINDINGS & ALIASES
