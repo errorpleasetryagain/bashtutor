@@ -72,6 +72,10 @@ export BASHTUTOR_LAST_EXIT_CODE="0"
 export BASHTUTOR_AI_AVAILABLE=""
 export BASHTUTOR_EXPLANATIONS_LOADED=""
 export BASHTUTOR_ARCH=$(uname -m 2>/dev/null || echo "unknown")
+export BASHTUTOR_SEEN_COMMANDS_FILE="${HOME}/.bashtutor/seen_commands"
+export BASHTUTOR_LAST_INTERVENTION=0
+export BASHTUTOR_SEQUENCES_FILE="${HOME}/.bashtutor/sequences"
+export BASHTUTOR_SMART_SUGGEST=0
 
 # =============================================================================
 # LOCAL EXPLANATIONS (60+ commands, lazy-loaded once)
@@ -272,6 +276,9 @@ BASHTUTOR_MAX_HISTORY=1000
 
 # Show extra debug info? (0 = off, 1 = on)
 BASHTUTOR_VERBOSE=0
+
+# Smart suggestions based on command history? (0 = off, 1 = on)
+BASHTUTOR_SMART_SUGGEST=0
 EOF
 }
 
@@ -280,11 +287,13 @@ function _bashtutor_load_config() {
     BASHTUTOR_CACHE_TTL="${BASHTUTOR_CACHE_TTL:-24}"
     BASHTUTOR_MAX_HISTORY="${BASHTUTOR_MAX_HISTORY:-1000}"
     BASHTUTOR_VERBOSE="${BASHTUTOR_VERBOSE:-0}"
+    BASHTUTOR_SMART_SUGGEST="${BASHTUTOR_SMART_SUGGEST:-0}"
 
     [[ -f "$BASHTUTOR_CONFIG_FILE" ]] && source "$BASHTUTOR_CONFIG_FILE" 2>/dev/null || true
 
     [[ -z "$BASHTUTOR_CACHE_TTL" ]] && BASHTUTOR_CACHE_TTL=24
     [[ -z "$BASHTUTOR_MAX_HISTORY" ]] && BASHTUTOR_MAX_HISTORY=1000
+    [[ -z "$BASHTUTOR_SMART_SUGGEST" ]] && BASHTUTOR_SMART_SUGGEST=0
 }
 
 function _bashtutor_check_ai() {
@@ -292,6 +301,174 @@ function _bashtutor_check_ai() {
     if command -v openclaw &>/dev/null; then
         BASHTUTOR_AI_AVAILABLE="1"
     fi
+}
+
+# =============================================================================
+# SMART EXPLANATION TRIGGER
+# =============================================================================
+
+function _bashtutor_is_interesting() {
+    local cmd="$1" exit_code="${2:-0}"
+
+    # Always interesting if command failed
+    [[ "$exit_code" -ne 0 ]] && return 0
+
+    # Build command signature (base + flags)
+    local base_cmd=$(echo "$cmd" | awk '{print $1}' 2>/dev/null)
+    local cmd_signature="${base_cmd} $(echo "$cmd" | sed "s/^[^ ]* //" | sed 's/[^ -]*//g' | tr -s ' ')"
+
+    # Check if we've seen this exact command before
+    if [[ -f "$BASHTUTOR_SEEN_COMMANDS_FILE" ]]; then
+        grep -F "$cmd" "$BASHTUTOR_SEEN_COMMANDS_FILE" &>/dev/null && return 1
+    fi
+
+    # Record this as seen
+    mkdir -p "$(dirname "$BASHTUTOR_SEEN_COMMANDS_FILE")" 2>/dev/null
+    echo "$cmd" >> "$BASHTUTOR_SEEN_COMMANDS_FILE" 2>/dev/null || true
+
+    return 0
+}
+
+# =============================================================================
+# PROACTIVE INTERVENTION
+# =============================================================================
+
+function _bashtutor_check_struggling() {
+    local cmd="$1" exit_code="${2:-0}"
+
+    # Cooldown: don't intervene more than once every 30 seconds
+    local now=$(date +%s 2>/dev/null || echo 0)
+    if [[ $((now - BASHTUTOR_LAST_INTERVENTION)) -lt 30 ]]; then
+        return 0
+    fi
+
+    local base_cmd=$(echo "$cmd" | awk '{print $1}' 2>/dev/null)
+
+    # Pattern 1: Command not found (typo detection)
+    if [[ "$exit_code" -eq 127 ]]; then
+        local suggestion=$(_bashtutor_suggest_typo_fix "$base_cmd")
+        if [[ -n "$suggestion" ]]; then
+            echo ""
+            _bt_warn "That command wasn't found — did you mean ${_BT_CYAN}${suggestion}${_BT_RESET}?"
+            echo ""
+            export BASHTUTOR_LAST_INTERVENTION="$now"
+            return 0
+        fi
+    fi
+
+    # Pattern 2: Repeated failure (same command failed 2+ times in last 5 history entries)
+    if [[ "$exit_code" -ne 0 && -f "$BASHTUTOR_HISTORY_FILE" ]]; then
+        local recent_failures=$(tail -5 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
+            grep "\"exit_code\":[^0]" | \
+            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
+            sed 's/\\"/"/g; s/\\\\/\\/g' | \
+            head -1)
+
+        local same_cmd_count=$(tail -5 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
+            grep -F "$base_cmd" | \
+            wc -l | tr -d ' ')
+
+        if [[ "$same_cmd_count" -ge 2 ]]; then
+            echo ""
+            _bt_warn "That command keeps failing — try ${_BT_CYAN}bashme explain${_BT_RESET} what you need, and I can help"
+            echo ""
+            export BASHTUTOR_LAST_INTERVENTION="$now"
+            return 0
+        fi
+    fi
+
+    # Pattern 3: Stuck in a directory (ls or pwd 3+ times without cd)
+    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
+        local ls_pwd_count=$(tail -10 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
+            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
+            grep -E '^(ls|pwd)' | \
+            wc -l | tr -d ' ')
+
+        local last_cd=$(tail -10 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
+            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
+            grep -E '^cd' | \
+            wc -l | tr -d ' ')
+
+        if [[ "$ls_pwd_count" -ge 3 && "$last_cd" -eq 0 ]]; then
+            echo ""
+            _bt_tip "Looks like you might want to move to a different folder — try ${_BT_CYAN}bashme go to my downloads${_BT_RESET}}"
+            echo ""
+            export BASHTUTOR_LAST_INTERVENTION="$now"
+            return 0
+        fi
+    fi
+}
+
+function _bashtutor_suggest_typo_fix() {
+    local typed="$1"
+
+    # Build a simple list of common commands to check
+    local closest=""
+    local closest_score=0
+
+    for cmd_key in "${!BASHTUTOR_EXPLANATIONS[@]}"; do
+        # Simple string distance: if first 2-3 chars match, it's a candidate
+        if [[ "${cmd_key:0:2}" == "${typed:0:2}" ]]; then
+            return 0
+            echo "$cmd_key"
+        fi
+    done
+
+    # No close match found
+    return 1
+}
+
+# =============================================================================
+# IMPROVEMENT 3: HISTORY-BASED LEARNING & SMART SUGGESTIONS
+# =============================================================================
+
+function _bashtutor_learn_sequence() {
+    local current_cmd="$1"
+    [[ -z "$current_cmd" ]] && return 0
+
+    # Get the previous command from history
+    local prev_cmd=""
+    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
+        # Get the second-to-last entry (last is the current command)
+        prev_cmd=$(tail -2 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | head -1 | \
+            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
+            sed 's/\\"/"/g; s/\\\\/\\/g')
+    fi
+
+    [[ -z "$prev_cmd" ]] && return 0
+
+    # Extract base commands (first word only)
+    local prev_base=$(echo "$prev_cmd" | awk '{print $1}')
+    local curr_base=$(echo "$current_cmd" | awk '{print $1}')
+
+    # Write the pair to sequences file
+    mkdir -p "$(dirname "$BASHTUTOR_SEQUENCES_FILE")" 2>/dev/null
+    echo "${prev_base}|||${curr_base}" >> "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null || true
+
+    # Trim sequences file to 500 lines max
+    if [[ -f "$BASHTUTOR_SEQUENCES_FILE" ]]; then
+        local lines=$(wc -l < "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | tr -d ' ')
+        if [[ "$lines" -gt 500 ]]; then
+            local tmp=$(mktemp 2>/dev/null) || return 0
+            tail -500 "$BASHTUTOR_SEQUENCES_FILE" > "$tmp" && mv "$tmp" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null || rm -f "$tmp"
+        fi
+    fi
+}
+
+function _bashtutor_suggest_next() {
+    local current_cmd="$1"
+    [[ -z "$current_cmd" || ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return 1
+
+    local curr_base=$(echo "$current_cmd" | awk '{print $1}')
+
+    # Count how many times each next-command followed this one
+    local suggestion=$(grep "^${curr_base}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
+        cut -d'|' -f3 | \
+        sort | uniq -c | sort -rn | \
+        awk '$1 >= 3 {print $2; exit}')
+
+    [[ -n "$suggestion" ]] && echo "$suggestion"
+    return 0
 }
 
 # =============================================================================
@@ -303,6 +480,89 @@ function _bashtutor_log() {
     [[ "$level" != "ERROR" && "${BASHTUTOR_VERBOSE}" != "1" ]] && return 0
     local ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
     printf '[%s] [%s] %s\n' "$ts" "$level" "$message" >> "$BASHTUTOR_LOG_FILE" 2>/dev/null || true
+}
+
+# =============================================================================
+# IMPROVEMENT 4: DESTRUCTIVE COMMAND SAFETY NET
+# =============================================================================
+
+function _bashtutor_safety_check() {
+    local cmd="$1"
+    [[ -z "$cmd" ]] && return 0
+
+    local base_cmd=$(echo "$cmd" | awk '{print $1}')
+
+    # Pattern 1: rm -rf or rm -r (recursive delete)
+    if [[ "$cmd" =~ ^rm[[:space:]]+-r ]]; then
+        local target=$(echo "$cmd" | sed 's/^rm[[:space:]]*-r[^[:space:]]*[[:space:]]*//' | awk '{print $1}')
+        echo ""
+        _bt_warn "HEADS UP: This will permanently delete ${target} — no undo!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    # Pattern 2: rm on important directories
+    if [[ "$cmd" =~ ^rm[[:space:]]+ ]]; then
+        local target=$(echo "$cmd" | sed 's/^rm[[:space:]]*//' | awk '{print $1}')
+        if [[ "$target" =~ ^(/|~|~/Documents|~/Desktop|/.*) ]]; then
+            echo ""
+            _bt_warn "HEADS UP: This will permanently delete ${target} — no undo!"
+            echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+            sleep 2
+            return 0
+        fi
+    fi
+
+    # Pattern 3: chmod -R 777 (world-writable security risk)
+    if [[ "$cmd" =~ chmod[[:space:]]+-R[[:space:]]+777 ]]; then
+        local target=$(echo "$cmd" | sed 's/^chmod[[:space:]]*-R[[:space:]]*777[[:space:]]*//' | awk '{print $1}')
+        echo ""
+        _bt_warn "HEADS UP: This will make everything in ${target} readable by everyone on this computer!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    # Pattern 4: chmod -R on root or home
+    if [[ "$cmd" =~ chmod[[:space:]]+-R.*/[[:space:]] ]] || [[ "$cmd" =~ chmod[[:space:]]+-R.*~[[:space:]] ]]; then
+        local target=$(echo "$cmd" | sed 's/^chmod[[:space:]]*-R[[:space:]]*[^ ]*[[:space:]]*//' | awk '{print $1}')
+        echo ""
+        _bt_warn "HEADS UP: This will change permissions on ${target} and everything inside!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    # Pattern 5: dd commands (disk destroyer)
+    if [[ "$cmd" =~ ^dd[[:space:]] ]]; then
+        echo ""
+        _bt_warn "HEADS UP: This writes directly to a disk — one wrong path can wipe a drive!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    # Pattern 6: mkfs (format a drive)
+    if [[ "$cmd" =~ ^mkfs[[:space:]] ]]; then
+        echo ""
+        _bt_warn "HEADS UP: This will FORMAT a drive — all data will be gone!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    # Pattern 7: colon truncate (: > filename)
+    if [[ "$cmd" =~ ^:[[:space:]]*\> ]]; then
+        local target=$(echo "$cmd" | sed 's/^:[[:space:]]*>[[:space:]]*//' | awk '{print $1}')
+        echo ""
+        _bt_warn "HEADS UP: This will erase the contents of ${target}!"
+        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
+        sleep 2
+        return 0
+    fi
+
+    return 0
 }
 
 # =============================================================================
@@ -324,8 +584,29 @@ function bashtutor_precmd() {
 
     _bashtutor_log_command "$BASHTUTOR_LAST_COMMAND" "$exit_code"
 
+    # Smart explanation: only explain if interesting
     if [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" ]]; then
-        _bashtutor_explain "$BASHTUTOR_LAST_COMMAND" "$exit_code"
+        if _bashtutor_is_interesting "$BASHTUTOR_LAST_COMMAND" "$exit_code"; then
+            _bashtutor_explain "$BASHTUTOR_LAST_COMMAND" "$exit_code"
+        fi
+    fi
+
+    # Proactive intervention: step in if user is struggling
+    _bashtutor_check_struggling "$BASHTUTOR_LAST_COMMAND" "$exit_code"
+
+    # Learning: record command sequences
+    _bashtutor_learn_sequence "$BASHTUTOR_LAST_COMMAND"
+
+    # Smart suggestions: if command succeeded, suggest what typically comes next
+    if [[ "$exit_code" -eq 0 ]]; then
+        if [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" || "${BASHTUTOR_SMART_SUGGEST}" == "1" ]]; then
+            local next_suggestion=$(_bashtutor_suggest_next "$BASHTUTOR_LAST_COMMAND")
+            if [[ -n "$next_suggestion" ]]; then
+                echo ""
+                _bt_tip "You usually run '${next_suggestion}' after this — type '${_BT_CYAN}bt do ${next_suggestion}${_BT_RESET}' or just run it"
+                echo ""
+            fi
+        fi
     fi
 
     export BASHTUTOR_LAST_COMMAND=""
@@ -810,6 +1091,14 @@ trap '_bashtutor_cleanup' EXIT 2>/dev/null || true
 autoload -Uz add-zsh-hook 2>/dev/null && {
     add-zsh-hook preexec bashtutor_preexec
     add-zsh-hook precmd bashtutor_precmd
+    add-zsh-hook zshaddhistory bashtutor_zshaddhistory
+}
+
+# Safety check hook for destructive commands (fires before command runs)
+function bashtutor_zshaddhistory() {
+    local cmd="$1"
+    _bashtutor_safety_check "$cmd"
+    return 0  # always return 0 to allow the command to run
 }
 
 # Ctrl+B → explain last command
