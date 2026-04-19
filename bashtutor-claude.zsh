@@ -1769,5 +1769,8 @@ if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo ""
     echo "      ${_BT_ORANGE}qq${_BT_RESET} plain english   ${_BT_GREEN}Ctrl+B${_BT_RESET} explain last   ${_BT_WHITE}cmd + what?${_BT_RESET} explain anything"
     echo ""
+    # Boot sound — plays in background so it doesn't slow terminal open
+    afplay /System/Library/Sounds/Glass.aiff &>/dev/null &
+
     export BASHTUTOR_WELCOME_SHOWN="1"
 fi
