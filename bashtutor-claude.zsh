@@ -1755,7 +1755,7 @@ if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
     echo "${_BT_GREEN}${_BT_BOLD}      ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
     echo "${_BT_GREEN}${_BT_BOLD}      ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
     echo "${_BT_WHITE}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}      Ba\$h Tutor  ~  bash for humans${_BT_RESET}"
+    echo "${_BT_WHITE}${_BT_BOLD}      B a \$ h   T u t o r   ~   b a s h   f o r   h u m a n s${_BT_RESET}"
     echo "${_BT_GREEN}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
     echo ""
     echo "      ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_ORANGE}🤖 Claude Edition${_BT_RESET}"
