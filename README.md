@@ -1,130 +1,163 @@
 # 🎓 BashTutor
 
-BashTutor is a zsh plugin that helps you learn bash by explaining what each command does — right when you run it. It's designed for dyslexic learning patterns and makes the terminal friendlier for beginners. Type commands in plain English with `bashme`, get instant explanations for every command you run, and build your confidence one command at a time.
+A macOS zsh plugin that teaches bash through doing — designed for dyslexic learning patterns. Type plain English, get bash commands. Run them, get plain English explanations. It watches your habits and gets smarter over time.
+
+Two editions:
+- **OpenClaw** — uses your local OpenClaw AI (default, no API key needed)
+- **Claude** — uses the Anthropic Claude API
 
 ---
 
-## ⚡ Installation
+## ⚡ One-line Install
 
 ```bash
-# Clone or download the repository
-git clone https://github.com/adamturton/bashtutor.git
-cd bashtutor
+# OpenClaw edition (default)
+bash install.sh
 
-# Run the installer
-./install.sh
+# Claude API edition
+bash install.sh --claude
 
-# Restart your terminal or run:
+# Remove BashTutor completely
+bash install.sh --uninstall
+```
+
+Then activate in your current terminal:
+```bash
 source ~/.zshrc
 ```
 
-For AI-powered explanations, set your Anthropic API key:
+For the **Claude edition**, add your API key to `~/.zshrc`:
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
-
-Without the API key, BashTutor will use local pattern matching for common commands.
+Get a free key at [console.anthropic.com](https://console.anthropic.com)
 
 ---
 
-## 🚀 Quick Start
+## 🍺 Install via Homebrew
 
 ```bash
-# Get a command from plain English
-bashme show me files modified today
-
-# Explain what a command does
-bashme find files larger than 100MB
-
-# Toggle automatic explanations for every command
-bashtutor_toggle
+brew tap errorpleasetryagain/bashtutor
+brew install bashtutor
 ```
+
+---
+
+## 🚀 What It Does
+
+### Plain English → bash command
+```bash
+bashme show files modified today
+bt find all pdfs in downloads        # bt is a shortcut for bashme
+```
+
+### Ghost autocomplete while you type
+As you type, grey suggestion text appears based on your history. Press `→` or `Tab` to accept it. Works like Fish shell — no configuration needed. Gets smarter the more you use it.
+
+### Explain any command
+```bash
+Ctrl+B                              # explain the last command you ran
+```
+
+### "what?" mode — paste anything and ask
+```bash
+bashme find . -name "*.log" -mtime +7 -delete what?
+# → Plain English explanation of what that command does
+```
+
+### Smart explanations
+BashTutor watches what you run. It only explains commands that are new to you, failed, or look risky — not ones you already know.
+
+### Destructive command safety net
+```bash
+rm -rf somefolder    # BashTutor warns you before this runs
+```
+
+### Python support
+```bash
+bashme install pandas
+bashme run my script
+bashme create a virtual environment
+```
+
+---
+
+## 💡 All Commands
+
+| Command | What it does |
+|---------|-------------|
+| `bashme <english>` | Translate plain English to bash |
+| `bt <english>` | Shortcut for bashme |
+| `Ctrl+B` | Explain the last command you ran |
+| `btx <command>` | Explain any specific command |
+| `bth` | Show your BashTutor command history |
+| `bashtutor_status` | Show plugin status and config |
+| `bashtutor_clear_cache` | Clear the AI response cache |
 
 ---
 
 ## ⚙️ Configuration
 
-Edit `~/.bashtutor/config` to customise your experience:
+Edit `~/.bashtutor/config`:
 
 ```bash
-# ~/.bashtutor/config
+# Auto-explain commands? (0 = off, 1 = on — only explains new/failed commands)
+BASHTUTOR_AUTO_EXPLAIN=0
 
-# Auto-explain every command (0 = off, 1 = on)
-# BASHTUTOR_AUTO_EXPLAIN=0
+# Remember AI answers for how long? (hours)
+BASHTUTOR_CACHE_TTL=24
 
-# Maximum cache age in hours (default: 24)
-# BASHTUTOR_CACHE_TTL=24
+# How many commands to keep in history
+BASHTUTOR_MAX_HISTORY=1000
 
-# Maximum history entries to keep (default: 1000)
-# BASHTUTOR_MAX_HISTORY=1000
+# Suggest next commands based on your habits? (0 = off, 1 = on)
+BASHTUTOR_SMART_SUGGEST=0
 
-# Enable verbose logging (default: 0)
-# BASHTUTOR_VERBOSE=0
+# Show debug info? (0 = off, 1 = on)
+BASHTUTOR_VERBOSE=0
 ```
-
-**Environment Variables:**
-- `ANTHROPIC_API_KEY`: Your Anthropic API key for Claude-powered explanations (optional but recommended)
-- `BASHTUTOR_AUTO_EXPLAIN`: Set to 1 to auto-explain every command
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### Issue: `command not found: bashme`
+**`command not found: bashme`**
+Run `source ~/.zshrc` or restart your terminal.
 
-**Fix:** Restart your terminal or run `source ~/.zshrc` to load the plugin.
+**Explanations are slow**
+If using the Claude edition, check your API key: `echo $ANTHROPIC_API_KEY`
+BashTutor falls back to local patterns automatically if the API is unavailable.
 
----
+**Ghost text not appearing**
+Ghost text needs at least 2 characters typed. It learns from your history so it gets better the more you use it.
 
-### Issue: Explanations are slow or timing out
-
-**Fix:** If using Claude API, check your `ANTHROPIC_API_KEY` is set correctly:
-```bash
-echo $ANTHROPIC_API_KEY  # Should show your key
-```
-
-If the API is slow, BashTutor will fall back to local pattern-based explanations automatically (no waiting).
-
----
-
-### Issue: History not being saved
-
-**Fix:** Ensure the config directory exists: `mkdir -p ~/.bashtutor`. Check `history_enabled` is set to `true` in your config file.
+**OpenClaw not found**
+BashTutor will use local patterns offline. Install OpenClaw separately to enable AI features for the OpenClaw edition.
 
 ---
 
 ## 📋 Requirements
 
-- **OS:** macOS (Intel or Apple Silicon)
-- **Shell:** zsh 5.0+
-- **Optional (but recommended):** Anthropic API key for Claude-powered explanations
-  - Get a free key at https://console.anthropic.com/
+- macOS (Intel or Apple Silicon)
+- zsh 5.0+
+- OpenClaw CLI (OpenClaw edition) or Anthropic API key (Claude edition)
 
-## 🚀 Getting Started
+---
 
-1. **Install the plugin** (see Installation above)
-2. **Set your API key** (optional but recommended):
-   ```bash
-   export ANTHROPIC_API_KEY="sk-ant-..."
-   ```
-3. **Try a command:**
-   ```bash
-   bashme show files modified today
-   ```
-4. **Toggle auto-explanations:**
-   ```bash
-   bashtutor_toggle
-   ```
-5. **View your history:**
-   ```bash
-   bashtutor_history
-   ```
+## 📁 Files
 
-## 🎯 Key Features
+```
+~/.bashtutor/
+├── bashtutor.zsh       # the plugin (copied here by installer)
+├── config              # your settings
+├── history.jsonl       # command history
+├── sequences           # learned command patterns (powers ghost text)
+└── cache/              # AI response cache
+```
 
-- **Plain English to bash:** Just describe what you want to do
-- **Auto-explanations:** Every command is explained (optional)
-- **Smart fallback:** Uses local patterns if API isn't available
-- **Command history:** Tracks all your commands with timestamps
-- **Offline ready:** Works without API key using pattern matching
-- **Dyslexia-friendly:** Simple emoji-based UI, plain language
+---
+
+## 🔗 Links
+
+- GitHub: [github.com/errorpleasetryagain/bashtutor](https://github.com/errorpleasetryagain/bashtutor)
+- Homebrew tap: [github.com/errorpleasetryagain/homebrew-bashtutor](https://github.com/errorpleasetryagain/homebrew-bashtutor)
