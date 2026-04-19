@@ -74,8 +74,9 @@ export BASHTUTOR_LAST_EXIT_CODE="0"
 export BASHTUTOR_AI_AVAILABLE=""
 export BASHTUTOR_EXPLANATIONS_LOADED=""
 export BASHTUTOR_ARCH=$(uname -m 2>/dev/null || echo "unknown")
-export BASHTUTOR_CLAUDE_MODEL="claude-sonnet-4-20250514"
+export BASHTUTOR_CLAUDE_MODEL="claude-sonnet-4-5"
 export BASHTUTOR_SEEN_COMMANDS_FILE="${HOME}/.bashtutor/seen_commands"
+export BASHTUTOR_SEQUENCES_FILE="${HOME}/.bashtutor/sequences"
 export BASHTUTOR_LAST_INTERVENTION=0
 
 # =============================================================================
