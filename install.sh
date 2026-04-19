@@ -280,9 +280,12 @@ main() {
     [[ "$EDITION" == "uninstall" ]] && uninstall
 
     echo ""
-    echo -e "${ORANGE}${BOLD}  Ba\$h Tutor${NC}${WHITE}${BOLD}  ~  bash for humans${NC}"
-    echo -e "${GREEN}  ── Installer v${SCRIPT_VERSION} ──────────────────────────${NC}"
-    echo -e "${CYAN}  Installing at OS level — loads in every terminal${NC}"
+    echo -e "${ORANGE}${BOLD}  ╔══════════════════════════════════════════╗${NC}"
+    echo -e "${ORANGE}${BOLD}  ║   Ba\$h Tutor  ~  bash for humans        ║${NC}"
+    echo -e "${GREEN}${BOLD}  ║   Installer v${SCRIPT_VERSION}                        ║${NC}"
+    echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${CYAN}  Installing at OS level — loads in every terminal automatically${NC}"
     echo ""
 
     # If running via curl, download files first
@@ -299,20 +302,28 @@ main() {
     wire_into_zshrc
 
     echo ""
-    echo -e "${BOLD}${GREEN}🎉 Done! BashTutor is installed.${NC}"
+    echo -e "${ORANGE}${BOLD}  ╔══════════════════════════════════════════╗${NC}"
+    echo -e "${ORANGE}${BOLD}  ║   🎉  BashTutor is installed!            ║${NC}"
+    echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════════╝${NC}"
     echo ""
-    echo "  Activate it now:"
+    echo -e "${WHITE}${BOLD}  ── Next step ────────────────────────────────${NC}"
     echo ""
-    echo -e "  ${CYAN}source ~/.zshrc${NC}"
+    echo -e "  ${BOLD}Open a new terminal window${NC} to start using BashTutor."
     echo ""
-    echo "  Then try:"
+    echo -e "  ${WHITE}(You must open a NEW terminal — not just this one)${NC}"
+    echo ""
+    echo -e "${WHITE}${BOLD}  ── Then try these ───────────────────────────${NC}"
     echo ""
     echo -e "  ${ORANGE}${BOLD}qq${NC} show files modified today"
+    echo -e "  ${ORANGE}${BOLD}qq${NC} find all pdfs in downloads"
     echo -e "  ${ORANGE}${BOLD}qq${NC} help"
-    echo -e "  ${CYAN}Ctrl+B${NC}  — explain the last command"
+    echo -e "  ${CYAN}Ctrl+B${NC}     explain the last command you ran"
     echo ""
-    echo "  To remove:"
+    echo -e "${WHITE}${BOLD}  ── To remove ────────────────────────────────${NC}"
+    echo ""
     echo -e "  ${CYAN}bash ~/bashtutor-prod/install.sh --uninstall${NC}"
+    echo ""
+    echo -e "${GREEN}  ─────────────────────────────────────────────${NC}"
     echo ""
 }
 
