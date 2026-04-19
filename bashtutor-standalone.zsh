@@ -33,7 +33,6 @@ fi
 
 _bt_cmd()  { printf "${_OR}${_B}  %s${_R}\n" "$*"; }
 _bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
-_bt_warn() { printf "${_RE}  ⚠  %s${_R}\n" "$*"; }
 _bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
 # ── boot line ─────────────────────────────────────────────────────────────────
@@ -159,12 +158,15 @@ function _bt_cat_warn() {
 function _bt_preexec() {
     export _BT_LAST_CMD="$1"
     local cmd="$1"
-    case "$cmd" in
+    # Normalise for matching: strip leading spaces, collapse runs of spaces
+    local cmd_n="${cmd## }"
+    cmd_n="${cmd_n//  / }"
+    case "$cmd_n" in
         rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
             _bt_cat_warn
             printf "${_RE}${_B}  ⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
             read -r _bt_ans
-            [[ "$_bt_ans" != [yY] ]] && return 1
+            [[ "$_bt_ans" != [yY] ]] && { BUFFER=""; zle redisplay 2>/dev/null; return 1; }
             ;;
     esac
     return 0
@@ -812,8 +814,12 @@ function qq() {
 
     _bt_lookup "$query" || {
         _bt_cat_thinking
-        _bt_err "No pattern found for: $query"
-        printf "${_CY}  Try rephrasing — or: man <command>${_R}\n"
+        printf "\n${_CY}  Hmm, not sure about '${_OR}%s${_CY}'.${_R}\n" "$query"
+        printf "${_CY}  Try rephrasing — for example:${_R}\n"
+        printf "${_GH}    • use a verb + object  (e.g. 'compress folder', 'delete file')${_R}\n"
+        printf "${_GH}    • name the tool        (e.g. 'git undo last commit')${_R}\n"
+        printf "${_GH}    • describe the goal    (e.g. 'show open ports', 'find large files')${_R}\n"
+        printf "${_CY}  Or run: ${_OR}man <command>${_CY} for manual pages.${_R}\n\n"
         return 1
     }
     _bt_display
@@ -886,6 +892,14 @@ function _bt_help() {
     printf "  qq compress a folder\n"
     printf "  qq git save changes\n"
     printf "  qq how do I redirect output\n"
+    printf "  qq show open ports\n"
+    printf "  qq docker list running containers\n"
+    printf "  qq kill process on port 3000\n"
+    printf "  qq download a file from url\n"
+    printf "  qq create a python virtual environment\n"
+    printf "  qq git undo last commit\n"
+    printf "  qq search text in all files recursively\n"
+    printf "  qq ssh tunnel to remote server\n"
     printf "\n${_B}Levels:${_R}\n"
     printf "  ${_DG}beginner${_R}      plain English + command\n"
     printf "  ${_DG}intermediate${_R}  command + brief note\n"

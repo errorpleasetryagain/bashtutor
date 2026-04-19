@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # BashTutor Installer
 # Installs BashTutor as a permanent macOS zsh OS-level plugin
-# Version: 1.3.0
+# Version: 1.4.0
 #
 # Works two ways:
 #   1. Run directly from the repo folder: bash install.sh
@@ -20,7 +20,7 @@ set -euo pipefail
 # CONFIGURATION
 # =============================================================================
 
-readonly SCRIPT_VERSION="1.3.0"
+readonly SCRIPT_VERSION="1.4.0"
 readonly BASHTUTOR_DIR="${HOME}/.bashtutor"
 readonly REPO_DIR="${HOME}/bashtutor-prod"
 readonly ZSHRC="${HOME}/.zshrc"
@@ -85,7 +85,7 @@ download_files() {
     # Try git clone first (cleanest)
     if command -v git &>/dev/null; then
         if [[ -d "$REPO_DIR/.git" ]]; then
-            info "Updating existing install..."
+            info "Updating existing download..."
             git -C "$REPO_DIR" fetch origin 2>/dev/null && \
                 git -C "$REPO_DIR" reset --hard origin/main 2>/dev/null && \
                 ok "Updated to latest version"
@@ -98,11 +98,18 @@ download_files() {
         return 0
     fi
 
-    # Fallback: download files directly via curl
-    info "git not found — downloading files directly..."
+    # Fallback: download files directly via curl (git is not required)
+    info "git is not installed — downloading files directly with curl instead..."
+    if ! command -v curl &>/dev/null; then
+        die "Neither git nor curl is installed. Please install one of them and try again.
+  macOS:  brew install git
+  Ubuntu: sudo apt install git
+  Fedora: sudo dnf install git"
+    fi
     mkdir -p "$REPO_DIR"
-    curl -fsSL "${GITHUB_RAW}/bashtutor-openclaw.zsh" -o "${REPO_DIR}/bashtutor-openclaw.zsh" || die "Download failed"
-    curl -fsSL "${GITHUB_RAW}/bashtutor-claude.zsh"   -o "${REPO_DIR}/bashtutor-claude.zsh"   || die "Download failed"
+    curl -fsSL "${GITHUB_RAW}/bashtutor-openclaw.zsh"  -o "${REPO_DIR}/bashtutor-openclaw.zsh"  || die "Download failed. Check your internet connection and try again."
+    curl -fsSL "${GITHUB_RAW}/bashtutor-claude.zsh"    -o "${REPO_DIR}/bashtutor-claude.zsh"    || die "Download failed. Check your internet connection and try again."
+    curl -fsSL "${GITHUB_RAW}/bashtutor-standalone.zsh" -o "${REPO_DIR}/bashtutor-standalone.zsh" || die "Download failed. Check your internet connection and try again."
     ok "Downloaded BashTutor"
     SCRIPT_DIR="$REPO_DIR"
 }
@@ -114,24 +121,34 @@ download_files() {
 uninstall() {
     info "Uninstalling BashTutor..."
 
-    if [[ -f "$ZSHRC" ]] && grep -qF "$SOURCE_MARKER" "$ZSHRC" 2>/dev/null; then
-        cp "$ZSHRC" "${ZSHRC}.uninstall.bak.$(date +%Y%m%d%H%M%S)"
-        grep -v "$SOURCE_MARKER" "$ZSHRC" | grep -v "source.*\.bashtutor/bashtutor\.zsh" > "${ZSHRC}.tmp" && \
-            mv "${ZSHRC}.tmp" "$ZSHRC"
-        ok "Removed from ~/.zshrc"
-    else
-        warn "BashTutor not found in ~/.zshrc"
-    fi
-
+    # Remove ~/.bashtutor/ directory
     if [[ -d "$BASHTUTOR_DIR" ]]; then
         rm -rf "$BASHTUTOR_DIR"
-        ok "Removed ~/.bashtutor/"
+        ok "Removed ~/.bashtutor/ directory"
     else
-        warn "~/.bashtutor/ not found"
+        warn "~/.bashtutor/ was not found — nothing to remove there"
+    fi
+
+    # Remove all BashTutor lines from ~/.zshrc
+    if [[ -f "$ZSHRC" ]]; then
+        if grep -qF "$SOURCE_MARKER" "$ZSHRC" 2>/dev/null || \
+           grep -q "source.*\.bashtutor/bashtutor\.zsh" "$ZSHRC" 2>/dev/null; then
+            cp "$ZSHRC" "${ZSHRC}.uninstall.bak.$(date +%Y%m%d%H%M%S)"
+            # Remove the marker line, the source line, and any blank line left before them
+            local _tmp; _tmp=$(mktemp)
+            grep -v "$SOURCE_MARKER" "$ZSHRC" \
+                | grep -v "source.*\.bashtutor/bashtutor\.zsh" \
+                > "$_tmp" && mv "$_tmp" "$ZSHRC"
+            ok "Removed BashTutor lines from ~/.zshrc"
+        else
+            warn "No BashTutor lines found in ~/.zshrc — nothing to remove there"
+        fi
+    else
+        warn "~/.zshrc not found — nothing to remove there"
     fi
 
     echo ""
-    ok "BashTutor uninstalled. Restart your terminal to finish."
+    ok "BashTutor has been removed. Open a new terminal window to finish."
     echo ""
     exit 0
 }
@@ -140,15 +157,29 @@ uninstall() {
 # CHECKS
 # =============================================================================
 
+check_zsh() {
+    # Check zsh is installed before anything else
+    if ! command -v zsh &>/dev/null; then
+        err "zsh is not installed on this system."
+        echo ""
+        echo "  BashTutor is a zsh plugin and requires zsh to work."
+        echo "  Install zsh using one of these commands:"
+        echo ""
+        echo "    macOS:            brew install zsh"
+        echo "    Ubuntu / Debian:  sudo apt install zsh"
+        echo "    Fedora / RHEL:    sudo dnf install zsh"
+        echo "    Arch Linux:       sudo pacman -S zsh"
+        echo ""
+        echo "  After installing zsh, re-run this installer."
+        echo ""
+        exit 1
+    fi
+}
+
 check_platform() {
     info "Checking your system..."
 
     [[ "$(uname -s)" == "Darwin" ]] || die "BashTutor only supports macOS right now."
-
-    # Check zsh exists
-    if ! command -v zsh &>/dev/null; then
-        die "zsh not found. Install it with: brew install zsh"
-    fi
 
     # Check current shell — warn if not zsh but don't block
     local shell_name="${SHELL##*/}"
@@ -159,7 +190,7 @@ check_platform() {
         echo -e "  ${CYAN}chsh -s \$(which zsh)${NC}"
         echo "  Then open a new terminal and re-run this installer."
         echo ""
-        die "Please switch to zsh first."
+        die "Please switch to zsh first, then re-run this installer."
     fi
 
     local zsh_version
@@ -183,9 +214,7 @@ check_plugin_file() {
 
     [[ -f "$PLUGIN_FILE" ]] || die "Plugin file not found. Try re-running the installer."
 
-    if command -v zsh &>/dev/null; then
-        zsh -n "$PLUGIN_FILE" 2>/dev/null || die "Syntax error in plugin file — try re-downloading"
-    fi
+    zsh -n "$PLUGIN_FILE" 2>/dev/null || die "The downloaded plugin file has a syntax error — try re-running the installer to get a fresh copy."
     ok "Plugin file found and valid"
 }
 
@@ -218,6 +247,7 @@ check_ai() {
 create_dirs() {
     info "Setting up ~/.bashtutor/ ..."
     mkdir -p "${BASHTUTOR_DIR}/cache"
+    chmod 700 "$BASHTUTOR_DIR"
     ok "Created ~/.bashtutor/"
 }
 
@@ -258,15 +288,16 @@ EOF
 }
 
 wire_into_zshrc() {
-    info "Wiring into your shell..."
-
     [[ -f "$ZSHRC" ]] || touch "$ZSHRC"
 
     if grep -qF "$SOURCE_MARKER" "$ZSHRC" 2>/dev/null; then
-        warn "Already in ~/.zshrc — updating"
-        grep -v "$SOURCE_MARKER" "$ZSHRC" | grep -v "source.*\.bashtutor/bashtutor\.zsh" > "${ZSHRC}.tmp" && \
-            mv "${ZSHRC}.tmp" "$ZSHRC"
+        # Already wired in — updating
+        info "Updating shell configuration..."
+        local _tmp; _tmp=$(mktemp)
+        grep -v "$SOURCE_MARKER" "$ZSHRC" | grep -v "source.*\.bashtutor/bashtutor\.zsh" > "$_tmp" && \
+            mv "$_tmp" "$ZSHRC"
     else
+        info "Wiring into your shell..."
         cp "$ZSHRC" "$ZSHRC_BACKUP"
         info "Backed up ~/.zshrc to ${ZSHRC_BACKUP##*/}"
     fi
@@ -280,6 +311,39 @@ EOF
     ok "Added to ~/.zshrc — BashTutor will load every time a terminal opens"
 }
 
+post_install_check() {
+    local target="${BASHTUTOR_DIR}/bashtutor.zsh"
+    if [[ ! -f "$target" ]]; then
+        warn "Post-install check skipped — plugin file not found at ${target}"
+        return
+    fi
+
+    local syntax_output
+    syntax_output=$(zsh -n "$target" 2>&1)
+    if [[ $? -eq 0 ]]; then
+        ok "Syntax check passed — plugin loaded without errors"
+    else
+        err "Syntax check failed: ${syntax_output}"
+        echo ""
+        echo "  The plugin was installed but may not work correctly."
+        echo "  Try re-running the installer to get a fresh copy, or report this"
+        echo "  at: https://github.com/errorpleasetryagain/bashtutor/issues"
+        echo ""
+    fi
+}
+
+# =============================================================================
+# EDITION DISPLAY NAME
+# =============================================================================
+
+edition_display_name() {
+    case "$EDITION" in
+        claude)     echo "Claude API" ;;
+        standalone) echo "Standalone" ;;
+        *)          echo "OpenClaw"   ;;
+    esac
+}
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -287,14 +351,30 @@ EOF
 main() {
     [[ "$EDITION" == "uninstall" ]] && uninstall
 
+    # Check zsh exists before anything else
+    check_zsh
+
+    # Detect update vs fresh install for messaging
+    local is_update=0
+    if [[ -f "${BASHTUTOR_DIR}/bashtutor.zsh" ]]; then
+        is_update=1
+    fi
+
+    local edition_name
+    edition_name=$(edition_display_name)
+
     echo ""
     echo -e "${ORANGE}${BOLD}  ╔══════════════════════════════════════════╗${NC}"
     echo -e "${ORANGE}${BOLD}  ║   Ba\$h Tutor  ~  bash for humans        ║${NC}"
     echo -e "${GREEN}${BOLD}  ║   Installer v${SCRIPT_VERSION}                        ║${NC}"
     echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${CYAN}  Installing at OS level — loads in every terminal automatically${NC}"
-    echo -e "${WHITE}  Edition: ${BOLD}${EDITION}${NC}"
+    if [[ $is_update -eq 1 ]]; then
+        echo -e "${CYAN}  Updating BashTutor...${NC}"
+    else
+        echo -e "${CYAN}  Installing at OS level — loads in every terminal automatically${NC}"
+    fi
+    echo -e "${WHITE}  Edition: ${BOLD}${edition_name}${NC}"
     echo ""
 
     # If running via curl, download files first
@@ -310,16 +390,23 @@ main() {
     create_config
     wire_into_zshrc
 
+    # Post-install syntax check
+    post_install_check
+
     echo ""
     echo -e "${ORANGE}${BOLD}  ╔══════════════════════════════════════════╗${NC}"
-    echo -e "${ORANGE}${BOLD}  ║   🎉  BashTutor is installed!            ║${NC}"
+    if [[ $is_update -eq 1 ]]; then
+        echo -e "${ORANGE}${BOLD}  ║   🎉  BashTutor updated!                 ║${NC}"
+    else
+        echo -e "${ORANGE}${BOLD}  ║   🎉  BashTutor is installed!            ║${NC}"
+    fi
+    echo -e "${GREEN}${BOLD}  ║   Edition: ${edition_name}$(printf '%*s' $((28 - ${#edition_name})) '')║${NC}"
     echo -e "${GREEN}${BOLD}  ╚══════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${WHITE}${BOLD}  ── Next step ────────────────────────────────${NC}"
-    echo ""
-    echo -e "  ${BOLD}Open a new terminal window${NC} to start using BashTutor."
-    echo ""
-    echo -e "  ${WHITE}(You must open a NEW terminal — not just this one)${NC}"
+    echo -e "${ORANGE}${BOLD}  ┌──────────────────────────────────────────┐${NC}"
+    echo -e "${ORANGE}${BOLD}  │  ► Open a NEW terminal window to start   │${NC}"
+    echo -e "${ORANGE}${BOLD}  │    (or run:  source ~/.zshrc )            │${NC}"
+    echo -e "${ORANGE}${BOLD}  └──────────────────────────────────────────┘${NC}"
     echo ""
     echo -e "${WHITE}${BOLD}  ── Then try these ───────────────────────────${NC}"
     echo ""

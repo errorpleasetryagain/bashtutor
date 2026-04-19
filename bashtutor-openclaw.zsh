@@ -64,7 +64,7 @@ typeset -g _BT_GHOST=""
 function _bt_ghost_update() {
     local prefix="$BUFFER"
     _BT_GHOST=""
-    [[ ${#prefix} -lt 2 ]] && { zle -R; return; }
+    [[ ${#prefix} -lt 1 ]] && { zle -R; return; }
     local match
     match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${(q)prefix}" | sed 's/^[0-9 \t]*//')
     [[ -n "$match" && "$match" != "$prefix" ]] && _BT_GHOST="${match#$prefix}"
@@ -124,7 +124,10 @@ function _bt_cat_warn() {
 function _bt_preexec() {
     export _BT_LAST_CMD="$1"
     local cmd="$1"
-    case "$cmd" in
+    # Normalise for matching: strip leading spaces, collapse runs of spaces
+    local cmd_n="${cmd## }"
+    cmd_n="${cmd_n//  / }"
+    case "$cmd_n" in
         rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
             _bt_cat_warn
             printf "${_RE}${_B}  ⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
@@ -278,7 +281,8 @@ function qq() {
     [[ "$query" == "help" || -z "$query" ]] && { _bt_help; return 0; }
 
     if command -v openclaw &>/dev/null; then
-        printf "${_CY}  ...${_R}\n"
+        _bt_cat_thinking
+        printf "${_CY}  Thinking...${_R}\n"
         local ai_response
         ai_response=$(_bt_openclaw_call "$query")
         if [[ -n "$ai_response" ]]; then
@@ -290,8 +294,12 @@ function qq() {
 
     _bt_local_lookup "$query" || {
         _bt_cat_thinking
-        _bt_err "No pattern found for: $query"
-        printf "${_CY}  Try rephrasing — or: man <command>${_R}\n"
+        printf "\n${_CY}  Hmm, not sure about '${_OR}%s${_CY}'.${_R}\n" "$query"
+        printf "${_CY}  Try rephrasing — for example:${_R}\n"
+        printf "${_GH}    • use a verb + object  (e.g. 'compress folder', 'delete file')${_R}\n"
+        printf "${_GH}    • name the tool        (e.g. 'git undo last commit')${_R}\n"
+        printf "${_GH}    • describe the goal    (e.g. 'show open ports', 'find large files')${_R}\n"
+        printf "${_CY}  Or run: ${_OR}man <command>${_CY} for manual pages.${_R}\n\n"
         return 1
     }
     _bt_display_local
@@ -362,10 +370,19 @@ function _bt_help() {
     printf "  Ctrl+B                  explain last command\n"
     printf "  Right arrow / Tab       accept ghost suggestion\n"
     printf "\n${_B}Examples:${_R}\n"
-    printf "  qq list files by size\n"
-    printf "  qq find large files\n"
-    printf "  qq git save and push\n"
+    printf "  qq list all files including hidden\n"
+    printf "  qq find files modified today\n"
+    printf "  qq compress a folder to tar.gz\n"
+    printf "  qq git save changes and push\n"
     printf "  qq run a script in the background\n"
+    printf "  qq show open ports\n"
+    printf "  qq docker list running containers\n"
+    printf "  qq kill process on port 3000\n"
+    printf "  qq search text in all files recursively\n"
+    printf "  qq create a python virtual environment\n"
+    printf "  qq ssh tunnel to remote server\n"
+    printf "  qq git undo last commit\n"
+    printf "  qq download a file from url\n"
     printf "\n${_B}Levels:${_R}\n"
     printf "  ${_DG}beginner${_R}      plain English + command\n"
     printf "  ${_DG}intermediate${_R}  command + brief note\n"
