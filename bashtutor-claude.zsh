@@ -38,7 +38,8 @@ if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null; then
     _BT_RED=$(tput setaf 1)
     _BT_BLUE=$(tput setaf 4)
     _BT_WHITE=$(tput setaf 7)
-    _BT_ORANGE=$(tput setaf 214 2>/dev/null || tput setaf 202 2>/dev/null || printf '\033[38;5;214m')  # orange
+    _BT_ORANGE=$(printf '\033[38;5;179m')   # khaki
+    _BT_GREEN=$(printf '\033[38;5;22m')    # dark green
 else
     _BT_RESET="" _BT_BOLD="" _BT_CYAN="" _BT_GREEN=""
     _BT_YELLOW="" _BT_MAGENTA="" _BT_RED="" _BT_BLUE="" _BT_WHITE="" _BT_ORANGE=""
