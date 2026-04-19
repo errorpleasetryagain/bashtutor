@@ -41,14 +41,68 @@ printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}[%s]${_R}  type ${_OR}qq help${_R} t
 
 # ── fish-style predictive ghost text ─────────────────────────────────────────
 typeset -g _BT_GHOST=""
+typeset -gA _BT_SMART=(
+    [g]="git status"
+    [gi]="git status"
+    [git]="git status"
+    [git\ s]="git status"
+    [git\ p]="git push"
+    [git\ c]="git commit -m ''"
+    [git\ l]="git log --oneline -10"
+    [git\ d]="git diff"
+    [git\ b]="git checkout -b "
+    [ls]="ls -la"
+    [l]="ls -la"
+    [cd]="cd ~"
+    [rm]="rm -f "
+    [mk]="mkdir -p "
+    [cp]="cp "
+    [mv]="mv "
+    [ca]="cat "
+    [gr]="grep -r '' ."
+    [fi]="find . -name ''"
+    [cu]="curl -s "
+    [ss]="ssh "
+    [ta]="tar -czf "
+    [zi]="zip -r "
+    [na]="nano "
+    [vi]="vim "
+    [py]="python3 "
+    [pi]="pip3 install "
+    [np]="npm install"
+    [br]="brew install "
+    [do]="docker ps"
+    [ps]="ps aux"
+    [ki]="kill "
+    [pk]="pkill -f "
+    [to]="top"
+    [df]="df -h"
+    [du]="du -sh *"
+    [wh]="which "
+    [ex]="export "
+    [so]="source ~/.zshrc"
+    [hi]="history | tail -20"
+    [cl]="clear"
+    [wc]="wc -l "
+    [di]="diff "
+    [ch]="chmod +x "
+    [su]="sudo "
+    [ec]="echo "
+    [qq]="qq "
+)
 
 function _bt_ghost_update() {
     local prefix="$BUFFER"
     _BT_GHOST=""
-    [[ ${#prefix} -lt 2 ]] && { zle -R; return; }
+    [[ ${#prefix} -lt 1 ]] && { zle -R; return; }
     local match
     match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${(q)prefix}" | sed 's/^[0-9 \t]*//')
-    [[ -n "$match" && "$match" != "$prefix" ]] && _BT_GHOST="${match#$prefix}"
+    if [[ -n "$match" && "$match" != "$prefix" ]]; then
+        _BT_GHOST="${match#$prefix}"
+    elif [[ ${#prefix} -ge 1 && -n "${_BT_SMART[$prefix]}" ]]; then
+        local smart="${_BT_SMART[$prefix]}"
+        [[ "$smart" != "$prefix" ]] && _BT_GHOST="${smart#$prefix}"
+    fi
     zle -R
 }
 
