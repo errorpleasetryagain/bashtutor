@@ -811,9 +811,9 @@ function _bashtutor_ask_openclaw() {
         return 1
     fi
 
-    # Run with timeout
+    # Run with timeout - using correct OpenClaw agent syntax
     local result
-    result=$(timeout "$timeout_secs" openclaw infer model run --prompt "$prompt" 2>/dev/null)
+    result=$(timeout "$timeout_secs" openclaw agent --message "$prompt" --agent main --thinking low 2>/dev/null)
     local rc=$?
 
     if [[ $rc -eq 0 && -n "$result" ]]; then
