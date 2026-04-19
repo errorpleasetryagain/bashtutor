@@ -1,1944 +1,337 @@
 #!/usr/bin/env zsh
-# ╔══════════════════════════════════════════════════════════════╗
-# ║  BashTutor — Claude Edition  🤖                             ║
-# ║  Version: 1.1.0                                             ║
-# ║  AI backend: Anthropic Claude API                           ║
-# ║  Teach bash through doing, not memorising                   ║
-# ╚══════════════════════════════════════════════════════════════╝
-#
-# Installation: source this file in your ~/.zshrc
-# Usage:
-#   bashme show files modified today    → get a bash command
-#   bt show files modified today        → same, shorter
-#   Ctrl+B                              → explain last command
-#   bashtutor_toggle                    → turn auto-explain on/off
-#   bashtutor_history                   → see recent commands
-
-# =============================================================================
-# GUARD: prevent double-loading
-# =============================================================================
+# BashTutor Claude — AI backend: Anthropic Claude API
+# qq <question>  |  bt <question>  |  bashme <question>
+# Requires: ANTHROPIC_API_KEY env var
+# Falls back to local patterns if unavailable
 
 [[ -n "${BASHTUTOR_LOADED}" ]] && return 0
-export BASHTUTOR_LOADED="1"
-export BASHTUTOR_VERSION="1.1.0"
+export BASHTUTOR_LOADED=1
+export BASHTUTOR_VERSION="2.0.0"
 export BASHTUTOR_BACKEND="claude"
 
-# =============================================================================
-# COLOURS & JOY
-# =============================================================================
+# ── dirs & config ─────────────────────────────────────────────────────────────
+export BASHTUTOR_DIR="${HOME}/.bashtutor"
+export BASHTUTOR_CONFIG="${BASHTUTOR_DIR}/config"
+export BASHTUTOR_LEVEL="beginner"
+export _BT_LAST_CMD=""
+export BASHTUTOR_MODEL="${BASHTUTOR_MODEL:-claude-haiku-4-5-20251001}"
 
-# Colours (only if terminal supports them)
-if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null; then
-    _BT_RESET=$(tput sgr0)
-    _BT_BOLD=$(tput bold)
-    _BT_CYAN=$(tput setaf 6)
-    _BT_GREEN=$(tput setaf 2)
-    _BT_YELLOW=$(tput setaf 3)
-    _BT_MAGENTA=$(tput setaf 5)
-    _BT_RED=$(tput setaf 1)
-    _BT_BLUE=$(tput setaf 4)
-    _BT_WHITE=$(tput setaf 7)
-    _BT_ORANGE=$(printf '\033[38;5;202m')   # Pantone 17-1464 TCX Flame Orange
-    _BT_GREEN=$(printf '\033[38;5;22m')    # Pantone PMS 3537 C forest green
+mkdir -p "$BASHTUTOR_DIR" 2>/dev/null
+[[ -f "$BASHTUTOR_CONFIG" ]] && source "$BASHTUTOR_CONFIG" 2>/dev/null
+[[ -z "$BASHTUTOR_LEVEL" ]] && BASHTUTOR_LEVEL="beginner"
+
+# ── colours ───────────────────────────────────────────────────────────────────
+if [[ -t 1 ]] && command -v tput &>/dev/null && tput colors &>/dev/null 2>&1; then
+    _R=$(tput sgr0); _B=$(tput bold)
+    _CY=$(tput setaf 6); _GR=$(tput setaf 2); _YE=$(tput setaf 3)
+    _MG=$(tput setaf 5); _RE=$(tput setaf 1); _BL=$(tput setaf 4)
 else
-    _BT_RESET="" _BT_BOLD="" _BT_CYAN="" _BT_GREEN=""
-    _BT_YELLOW="" _BT_MAGENTA="" _BT_RED="" _BT_BLUE="" _BT_WHITE="" _BT_ORANGE=""
+    _R="" _B="" _CY="" _GR="" _YE="" _MG="" _RE="" _BL=""
 fi
 
-# Print helpers
-_bt_info()    { echo "${_BT_CYAN}${_BT_BOLD}🐚 $*${_BT_RESET}"; }
-_bt_success() { echo "${_BT_GREEN}${_BT_BOLD}✅ $*${_BT_RESET}"; }
-_bt_warn()    { echo "${_BT_YELLOW}⚠️  $*${_BT_RESET}"; }
-_bt_error()   { echo "${_BT_RED}❌ $*${_BT_RESET}" >&2; }
-_bt_tip()     { echo "${_BT_MAGENTA}💡 $*${_BT_RESET}"; }
-_bt_cmd()     { echo "${_BT_BLUE}${_BT_BOLD}$ $*${_BT_RESET}"; }
-_bt_explain() { echo "${_BT_CYAN}📖 $*${_BT_RESET}"; }
+_bt_cmd()  { printf "${_BL}${_B}  %s${_R}\n" "$*"; }
+_bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
+_bt_warn() { printf "${_YE}  ⚠  %s${_R}\n" "$*"; }
+_bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
-# Fun loading spinners
-_bt_thinking() {
-    echo "${_BT_YELLOW}🤔 Thinking...${_BT_RESET}"
+# ── boot line ─────────────────────────────────────────────────────────────────
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    printf "${_CY}${_B}❯ BashTutor${_R} ${_GR}[claude·%s]${_R}  type ${_BL}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+else
+    printf "${_CY}${_B}❯ BashTutor${_R} ${_YE}[local·%s]${_R}  set ANTHROPIC_API_KEY for AI\n" "$BASHTUTOR_LEVEL"
+fi
+
+# ── ghost complete from history (Ctrl+F) ──────────────────────────────────────
+function _bt_history_complete() {
+    local prefix="$BUFFER"
+    [[ -z "$prefix" ]] && return
+    local match
+    match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${prefix}") || return
+    [[ -z "$match" || "$match" == "$prefix" ]] && return
+    BUFFER="$match"
+    CURSOR=${#BUFFER}
+    zle redisplay
 }
-
-# =============================================================================
-# PATHS & CONFIGURATION
-# =============================================================================
-
-export BASHTUTOR_CONFIG_DIR="${HOME}/.bashtutor"
-export BASHTUTOR_CACHE_DIR="${BASHTUTOR_CONFIG_DIR}/cache"
-export BASHTUTOR_CONFIG_FILE="${BASHTUTOR_CONFIG_DIR}/config"
-export BASHTUTOR_HISTORY_FILE="${BASHTUTOR_CONFIG_DIR}/history.jsonl"
-export BASHTUTOR_LOG_FILE="${BASHTUTOR_CONFIG_DIR}/bashtutor.log"
-
-export BASHTUTOR_LAST_COMMAND=""
-export BASHTUTOR_LAST_EXIT_CODE="0"
-export BASHTUTOR_AI_AVAILABLE=""
-export BASHTUTOR_EXPLANATIONS_LOADED=""
-export BASHTUTOR_ARCH=$(uname -m 2>/dev/null || echo "unknown")
-export BASHTUTOR_CLAUDE_MODEL="claude-sonnet-4-6"
-export BASHTUTOR_SEEN_COMMANDS_FILE="${HOME}/.bashtutor/seen_commands"
-export BASHTUTOR_SEQUENCES_FILE="${HOME}/.bashtutor/sequences"
-export BASHTUTOR_LAST_INTERVENTION=0
-
-# =============================================================================
-# LOCAL EXPLANATIONS (60+ commands, lazy-loaded once)
-# =============================================================================
-
-declare -gA BASHTUTOR_EXPLANATIONS
-
-function _bashtutor_load_explanations() {
-    [[ "${BASHTUTOR_EXPLANATIONS_LOADED}" == "1" ]] && return 0
-
-    BASHTUTOR_EXPLANATIONS=(
-        [ls]="Listed the files and folders here"
-        [ll]="Listed files with full details — size, date, permissions"
-        [la]="Listed everything including hidden files (ones starting with .)"
-        [lh]="Listed files with sizes in human-friendly format (KB, MB, GB)"
-        [cd]="Moved into a different folder"
-        [pwd]="Showed you where you are right now"
-        [mkdir]="Created a new folder"
-        [rm]="Deleted something — gone for good, no recycle bin"
-        [rmdir]="Removed an empty folder"
-        [cp]="Made a copy of a file or folder"
-        [mv]="Moved or renamed a file"
-        [touch]="Created an empty file, or updated its 'last modified' time"
-        [cat]="Printed a file's contents to the screen"
-        [less]="Opened a file to scroll through — press Q to quit"
-        [head]="Showed just the top few lines of a file"
-        [tail]="Showed just the bottom few lines of a file"
-        [grep]="Searched for text inside files"
-        [find]="Searched for files by name, size, or date"
-        [locate]="Found files quickly using a pre-built index"
-        [which]="Showed where a command lives on your system"
-        [whereis]="Found the command, its manual page, and source"
-        [du]="Showed how much disk space a folder is using"
-        [df]="Showed how much space is left on your drives"
-        [ps]="Listed all the programs currently running"
-        [top]="Live view of what's using your CPU and memory"
-        [htop]="Fancy live view of system resources — press Q to quit"
-        [kill]="Stopped a running program by its ID number"
-        [killall]="Stopped all programs with a given name"
-        [ping]="Checked if a server is reachable"
-        [curl]="Fetched data from a URL — great for APIs"
-        [wget]="Downloaded a file from the internet"
-        [ssh]="Opened a secure terminal connection to another machine"
-        [scp]="Securely copied a file to or from another machine"
-        [rsync]="Synced files between two places — only copies what changed"
-        [tar]="Packed or unpacked an archive file (.tar, .tar.gz)"
-        [zip]="Compressed files into a .zip archive"
-        [unzip]="Unpacked a .zip archive"
-        [gzip]="Compressed a single file"
-        [gunzip]="Decompressed a .gz file"
-        [bzip2]="Compressed a file with better compression than gzip"
-        [bunzip2]="Decompressed a .bz2 file"
-        [xz]="Compressed a file with very high compression ratio"
-        [unxz]="Decompressed an .xz file"
-        [7z]="Packed or unpacked a 7-Zip archive"
-        [zstd]="Compressed or decompressed a zstd file — fast compression"
-        [chmod]="Changed who can read, write, or run a file"
-        [chown]="Changed who owns a file"
-        [chgrp]="Changed which group owns a file"
-        [umask]="Set the default permissions for new files you create"
-        [sudo]="Ran a command with admin powers — use carefully"
-        [su]="Switched to a different user account"
-        [passwd]="Changed a user's password"
-        [git]="Ran a git command — for tracking code changes"
-        [git-status]="Checked what's changed in your git repository"
-        [git-log]="Showed the history of commits with details"
-        [git-diff]="Showed what changed between versions"
-        [git-branch]="Listed or managed branches in your repository"
-        [git-checkout]="Switched to a different branch or version"
-        [git-merge]="Combined changes from one branch into another"
-        [git-rebase]="Replayed commits from one branch on top of another"
-        [git-clone]="Downloaded a full copy of a repository"
-        [git-fetch]="Downloaded updates from a remote repository"
-        [git-push]="Uploaded your commits to a remote repository"
-        [git-pull]="Downloaded and merged updates from a remote repository"
-        [git-stash]="Saved your changes temporarily without committing"
-        [git-tag]="Created a named marker for a specific commit"
-        [git-blame]="Showed who changed each line in a file and when"
-        [git-reset]="Undid commits or unstaged files"
-        [git-add]="Staged changes to be included in the next commit"
-        [git-commit]="Saved your staged changes permanently"
-        [git-remote]="Managed connections to remote repositories"
-        [brew]="Ran Homebrew — macOS package manager"
-        [brew-install]="Installed a package via Homebrew"
-        [brew-uninstall]="Removed a package installed via Homebrew"
-        [brew-update]="Updated Homebrew itself"
-        [brew-upgrade]="Upgraded all installed packages to latest versions"
-        [brew-list]="Showed all packages installed via Homebrew"
-        [brew-search]="Searched for packages available in Homebrew"
-        [brew-info]="Showed detailed information about a Homebrew package"
-        [brew-doctor]="Checked Homebrew installation for problems"
-        [npm]="Ran Node.js package manager"
-        [npm-init]="Created a new Node.js project with a package.json file"
-        [npm-install]="Installed packages listed in package.json"
-        [npm-run]="Ran a script defined in package.json"
-        [npm-start]="Started your Node.js application"
-        [npm-list]="Showed all installed npm packages"
-        [npm-search]="Searched for packages on the npm registry"
-        [npm-update]="Updated packages to their latest versions"
-        [npm-audit]="Checked for security vulnerabilities in packages"
-        [pip]="Ran Python package manager (Python 2)"
-        [pip3]="Ran Python 3 package manager"
-        [pip-install]="Installed a Python package"
-        [pip-list]="Showed all installed Python packages"
-        [pip-freeze]="Saved a list of installed packages to a file"
-        [pip-uninstall]="Removed a Python package"
-        [pip-search]="Searched for Python packages"
-        [python]="Ran a Python program or script (usually Python 2)"
-        [python3]="Ran a Python 3 program or script"
-        [node]="Ran a Node.js program"
-        [docker]="Ran a Docker container command"
-        [docker-ps]="Showed all running Docker containers"
-        [docker-images]="Showed all Docker images on your system"
-        [docker-run]="Started a new Docker container"
-        [docker-build]="Built a Docker image from a Dockerfile"
-        [docker-stop]="Stopped a running Docker container"
-        [docker-rm]="Removed a Docker container"
-        [docker-pull]="Downloaded a Docker image from a registry"
-        [docker-push]="Uploaded a Docker image to a registry"
-        [docker-logs]="Showed output/logs from a Docker container"
-        [docker-exec]="Ran a command inside a running container"
-        [docker-compose]="Managed multi-container Docker applications"
-        [kubectl]="Ran a Kubernetes command"
-        [make]="Built software using instructions in a Makefile"
-        [cmake]="Generated build system files from CMakeLists.txt"
-        [gradle]="Built Java/Kotlin projects with Gradle"
-        [mvn]="Built Java projects with Maven"
-        [cargo]="Built Rust projects with Cargo"
-        [go]="Compiled or ran Go programs"
-        [rustc]="Compiled a Rust program"
-        [javac]="Compiled a Java program to bytecode"
-        [java]="Ran a compiled Java program"
-        [deno]="Ran a Deno (modern Node.js alternative) program"
-        [ruby]="Ran a Ruby program or script"
-        [gem]="Managed Ruby packages"
-        [bundle]="Managed Ruby project dependencies"
-        [rails]="Ran a Ruby on Rails web application"
-        [man]="Opened the manual page for a command"
-        [clear]="Cleared the terminal screen"
-        [exit]="Closed this terminal session"
-        [history]="Showed your recent command history"
-        [alias]="Created a shortcut for a longer command"
-        [export]="Set an environment variable for this session"
-        [source]="Loaded and ran a shell script in the current session"
-        [echo]="Printed text to the screen"
-        [date]="Showed the current date and time"
-        [whoami]="Showed your current username"
-        [uname]="Showed info about your operating system"
-        [hostname]="Showed your computer's network name"
-        [uptime]="Showed how long your computer has been on"
-        [open]="Opened a file or folder in its default app (macOS)"
-        [pbcopy]="Copied something to your clipboard (macOS)"
-        [pbpaste]="Pasted from your clipboard (macOS)"
-        [caffeinate]="Kept your Mac from sleeping"
-        [say]="Made your Mac speak text out loud"
-        [screencapture]="Took a screenshot (macOS)"
-        [sips]="Manipulated image files — crop, rotate, resize (macOS)"
-        [mdls]="Showed detailed metadata about a file (macOS)"
-        [mdfind]="Searched for files using Spotlight (macOS)"
-        [osascript]="Ran AppleScript commands (macOS)"
-        [xattr]="Managed extended file attributes"
-        [file]="Showed what type of file something is"
-        [stat]="Showed detailed file information — size, permissions, dates"
-        [xargs]="Ran a command once for each item from a list"
-        [awk]="Processed text — great for working with columns"
-        [sed]="Edited text using find-and-replace rules"
-        [sort]="Sorted lines alphabetically or numerically"
-        [uniq]="Removed duplicate lines"
-        [wc]="Counted words, lines, or characters in a file"
-        [tr]="Translated or deleted characters"
-        [cut]="Cut out specific columns from text"
-        [paste]="Joined lines from multiple files side by side"
-        [join]="Merged lines from files that have a common key"
-        [comm]="Compared two sorted files and showed differences"
-        [column]="Aligned text into neat columns"
-        [fmt]="Rewrapped text to fit a width limit"
-        [split]="Split a file into smaller pieces"
-        [diff]="Compared two files and showed what's different"
-        [patch]="Applied a diff patch to a file"
-        [ln]="Created a link (shortcut) to a file"
-        [readlink]="Showed where a link points to"
-        [env]="Showed or set environment variables"
-        [printenv]="Printed the value of an environment variable"
-        [set]="Showed all shell variables"
-        [unset]="Removed a variable from the environment"
-        [jobs]="Showed background jobs running in this terminal"
-        [bg]="Sent a paused job to run in the background"
-        [fg]="Brought a background job back to the foreground"
-        [nohup]="Ran a command that keeps going even after you log out"
-        [sleep]="Paused for a number of seconds"
-        [time]="Measured how long a command takes to run"
-        [timeout]="Ran a command and stopped it if it takes too long"
-        [watch]="Ran a command repeatedly and showed the output"
-        [nice]="Ran a command with lower priority"
-        [wait]="Waited for a background job to finish"
-        [cron]="Scheduled commands to run automatically"
-        [crontab]="Edited your scheduled tasks list"
-        [at]="Scheduled a one-off command to run later"
-        [reboot]="Restarted the computer"
-        [shutdown]="Turned the computer off"
-        [ifconfig]="Showed network interface information (older Macs)"
-        [ip]="Showed network information (Linux)"
-        [netstat]="Showed network connections"
-        [lsof]="Listed open files and the programs using them"
-        [nmap]="Scanned a network for open ports"
-        [traceroute]="Showed the path data takes to reach a server"
-        [mtr]="Showed network path with live statistics — mix of traceroute and ping"
-        [whois]="Looked up domain registration information"
-        [dig]="Looked up DNS information for a domain"
-        [nslookup]="Queried a DNS server"
-        [host]="Found the IP address for a domain name"
-        [nc]="Tested network connections — great for checking if ports are open"
-        [telnet]="Connected to a remote server on a specific port"
-        [tcpdump]="Captured network traffic for analysis"
-        [ssh-keygen]="Generated SSH security keys for passwordless login"
-        [ssh-copy-id]="Copied your SSH public key to a server"
-        [sftp]="Connected to a server for secure file transfer"
-        [vim]="Opened a powerful text editor — press :q to exit"
-        [nano]="Opened an easier text editor — press Ctrl+X to exit"
-        [emacs]="Opened a highly customizable text editor"
-        [code]="Opened Visual Studio Code"
-        [subl]="Opened Sublime Text editor"
-        [openssl]="Ran cryptography and certificate tools"
-        [base64]="Encoded or decoded base64 data"
-        [md5]="Calculated an MD5 checksum"
-        [shasum]="Calculated a SHA checksum"
-        [diskutil]="Managed disks and volumes (macOS)"
-        [hdiutil]="Worked with disk images (macOS)"
-        [defaults]="Read or wrote macOS app preferences"
-        [plutil]="Read or wrote property list files (.plist)"
-        [launchctl]="Managed macOS background services"
-        [pmset]="Managed power settings (macOS)"
-        [softwareupdate]="Managed macOS software updates"
-        [xcode-select]="Managed Xcode command line tools"
-        [security]="Managed certificates and keychains (macOS)"
-        [spctl]="Managed system security policies (macOS)"
-        [codesign]="Signed code with a digital signature (macOS)"
-        [networksetup]="Managed network configuration (macOS)"
-        [scutil]="Queried system configuration (macOS)"
-        [systemsetup]="Configured system settings (macOS)"
-        [mysql]="Opened a MySQL database client"
-        [psql]="Opened a PostgreSQL database client"
-        [sqlite3]="Opened an SQLite database"
-        [mongosh]="Opened a MongoDB database shell"
-        [redis-cli]="Opened a Redis cache command-line client"
-        [systemctl]="Managed services on Linux systems"
-        [systemd]="Managed system services and boot process (Linux)"
-    )
-
-    export BASHTUTOR_EXPLANATIONS_LOADED="1"
-}
-
-# =============================================================================
-# JSON ESCAPING (3-layer fallback: Python → jq → manual)
-# =============================================================================
-
-function _bashtutor_json_escape() {
-    local input="$1"
-    [[ -z "$input" ]] && { echo ""; return 0; }
-
-    # Layer 1: Python (most robust)
-    if command -v python3 &>/dev/null; then
-        local result
-        result=$(python3 -c "import json,sys; s=json.dumps(sys.argv[1]); print(s[1:-1])" "$input" 2>/dev/null)
-        [[ $? -eq 0 && -n "$result" ]] && { echo -n "$result"; return 0; }
-    fi
-
-    # Layer 2: jq
-    if command -v jq &>/dev/null; then
-        local result
-        result=$(printf '%s' "$input" | jq -Rs '.[:-1]' 2>/dev/null | sed 's/^"//' 2>/dev/null)
-        [[ $? -eq 0 && -n "$result" ]] && { echo -n "$result"; return 0; }
-    fi
-
-    # Layer 3: manual
-    local output="$input"
-    output="${output//\\/\\\\}"
-    output="${output//\"/\\\"}"
-    output="${output//$'\n'/\\n}"
-    output="${output//$'\t'/\\t}"
-    output="${output//$'\r'/\\r}"
-    echo -n "$output"
-}
-
-# =============================================================================
-# SETUP & CONFIG
-# =============================================================================
-
-function _bashtutor_setup() {
-    mkdir -p "$BASHTUTOR_CONFIG_DIR" "$BASHTUTOR_CACHE_DIR" 2>/dev/null
-
-    [[ ! -f "$BASHTUTOR_CONFIG_FILE" ]] && _bashtutor_create_default_config
-
-    _bashtutor_load_config
-    _bashtutor_load_explanations
-    _bashtutor_check_ai
-    _bashtutor_zle_ghost_setup 2>/dev/null || true
-}
-
-function _bashtutor_create_default_config() {
-    cat > "$BASHTUTOR_CONFIG_FILE" 2>/dev/null << 'EOF'
-# BashTutor Configuration
-# Edit these to change how BashTutor behaves
-
-# Auto-explain every command? (0 = off, 1 = on)
-BASHTUTOR_AUTO_EXPLAIN=0
-
-# How long to remember AI answers (hours)
-BASHTUTOR_CACHE_TTL=24
-
-# How many commands to keep in history
-BASHTUTOR_MAX_HISTORY=1000
-
-# Show extra debug info? (0 = off, 1 = on)
-BASHTUTOR_VERBOSE=0
-
-# Smart suggestions based on command history? (0 = off, 1 = on)
-BASHTUTOR_SMART_SUGGEST=0
-EOF
-}
-
-function _bashtutor_load_config() {
-    BASHTUTOR_AUTO_EXPLAIN="${BASHTUTOR_AUTO_EXPLAIN:-0}"
-    BASHTUTOR_CACHE_TTL="${BASHTUTOR_CACHE_TTL:-24}"
-    BASHTUTOR_MAX_HISTORY="${BASHTUTOR_MAX_HISTORY:-1000}"
-    BASHTUTOR_VERBOSE="${BASHTUTOR_VERBOSE:-0}"
-    BASHTUTOR_SMART_SUGGEST="${BASHTUTOR_SMART_SUGGEST:-0}"
-
-    [[ -f "$BASHTUTOR_CONFIG_FILE" ]] && source "$BASHTUTOR_CONFIG_FILE" 2>/dev/null || true
-
-    [[ -z "$BASHTUTOR_CACHE_TTL" ]] && BASHTUTOR_CACHE_TTL=24
-    [[ -z "$BASHTUTOR_MAX_HISTORY" ]] && BASHTUTOR_MAX_HISTORY=1000
-    [[ -z "$BASHTUTOR_SMART_SUGGEST" ]] && BASHTUTOR_SMART_SUGGEST=0
-}
-
-function _bashtutor_check_ai() {
-    BASHTUTOR_AI_AVAILABLE=""
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        BASHTUTOR_AI_AVAILABLE="1"
-    fi
-}
-
-# =============================================================================
-# SMART EXPLANATION TRIGGER
-# =============================================================================
-
-function _bashtutor_is_interesting() {
-    local cmd="$1" exit_code="${2:-0}"
-
-    # Always interesting if command failed
-    [[ "$exit_code" -ne 0 ]] && return 0
-
-    # Build command signature (base + flags)
-    local base_cmd=$(echo "$cmd" | awk '{print $1}' 2>/dev/null)
-    local cmd_signature="${base_cmd} $(echo "$cmd" | sed "s/^[^ ]* //" | sed 's/[^ -]*//g' | tr -s ' ')"
-
-    # Check if we've seen this exact command before
-    if [[ -f "$BASHTUTOR_SEEN_COMMANDS_FILE" ]]; then
-        grep -F "$cmd" "$BASHTUTOR_SEEN_COMMANDS_FILE" &>/dev/null && return 1
-    fi
-
-    # Record this as seen
-    mkdir -p "$(dirname "$BASHTUTOR_SEEN_COMMANDS_FILE")" 2>/dev/null
-    echo "$cmd" >> "$BASHTUTOR_SEEN_COMMANDS_FILE" 2>/dev/null || true
-
-    return 0
-}
-
-# =============================================================================
-# PROACTIVE INTERVENTION
-# =============================================================================
-
-function _bashtutor_check_struggling() {
-    local cmd="$1" exit_code="${2:-0}"
-
-    # Cooldown: don't intervene more than once every 30 seconds
-    local now=$(date +%s 2>/dev/null || echo 0)
-    if [[ $((now - BASHTUTOR_LAST_INTERVENTION)) -lt 30 ]]; then
-        return 0
-    fi
-
-    local base_cmd=$(echo "$cmd" | awk '{print $1}' 2>/dev/null)
-
-    # Pattern 1: Command not found (typo detection)
-    if [[ "$exit_code" -eq 127 ]]; then
-        local suggestion=$(_bashtutor_suggest_typo_fix "$base_cmd")
-        if [[ -n "$suggestion" ]]; then
-            echo ""
-            _bt_warn "That command wasn't found — did you mean ${_BT_CYAN}${suggestion}${_BT_RESET}?"
-            echo ""
-            export BASHTUTOR_LAST_INTERVENTION="$now"
-            return 0
-        fi
-    fi
-
-    # Pattern 2: Repeated failure (same command failed 2+ times in last 5 history entries)
-    if [[ "$exit_code" -ne 0 && -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        local recent_failures=$(tail -5 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
-            grep "\"exit_code\":[^0]" | \
-            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
-            sed 's/\\"/"/g; s/\\\\/\\/g' | \
-            head -1)
-
-        local same_cmd_count=$(tail -5 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
-            grep -F "$base_cmd" | \
-            wc -l | tr -d ' ')
-
-        if [[ "$same_cmd_count" -ge 2 ]]; then
-            echo ""
-            _bt_warn "That command keeps failing — try ${_BT_CYAN}bashme explain${_BT_RESET} what you need, and I can help"
-            echo ""
-            export BASHTUTOR_LAST_INTERVENTION="$now"
-            return 0
-        fi
-    fi
-
-    # Pattern 3: Stuck in a directory (ls or pwd 3+ times without cd)
-    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        local ls_pwd_count=$(tail -10 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
-            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
-            grep -E '^(ls|pwd)' | \
-            wc -l | tr -d ' ')
-
-        local last_cd=$(tail -10 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
-            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
-            grep -E '^cd' | \
-            wc -l | tr -d ' ')
-
-        if [[ "$ls_pwd_count" -ge 3 && "$last_cd" -eq 0 ]]; then
-            echo ""
-            _bt_tip "Looks like you might want to move to a different folder — try ${_BT_CYAN}bashme go to my downloads${_BT_RESET}}"
-            echo ""
-            export BASHTUTOR_LAST_INTERVENTION="$now"
-            return 0
-        fi
-    fi
-}
-
-function _bashtutor_suggest_typo_fix() {
-    local typed="$1"
-
-    # Build a simple list of common commands to check
-    local closest=""
-    local closest_score=0
-
-    for cmd_key in "${!BASHTUTOR_EXPLANATIONS[@]}"; do
-        # Simple string distance: if first 2-3 chars match, it's a candidate
-        if [[ "${cmd_key:0:2}" == "${typed:0:2}" ]]; then
-            echo "$cmd_key"
-            return 0
-        fi
-    done
-
-    # No close match found
-    return 1
-}
-
-# =============================================================================
-# IMPROVEMENT 3: HISTORY-BASED LEARNING & SMART SUGGESTIONS
-# =============================================================================
-
-function _bashtutor_learn_sequence() {
-    local current_cmd="$1"
-    [[ -z "$current_cmd" ]] && return 0
-
-    # Get the previous command from history
-    local prev_cmd=""
-    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        # Get the second-to-last entry (last is the current command)
-        prev_cmd=$(tail -2 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | head -1 | \
-            sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
-            sed 's/\\"/"/g; s/\\\\/\\/g')
-    fi
-
-    [[ -z "$prev_cmd" ]] && return 0
-
-    # Extract base commands (first word only)
-    local prev_base=$(echo "$prev_cmd" | awk '{print $1}')
-    local curr_base=$(echo "$current_cmd" | awk '{print $1}')
-
-    # Write the pair to sequences file
-    mkdir -p "$(dirname "$BASHTUTOR_SEQUENCES_FILE")" 2>/dev/null
-    echo "${prev_base}|||${curr_base}" >> "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null || true
-
-    # Trim sequences file to 500 lines max
-    if [[ -f "$BASHTUTOR_SEQUENCES_FILE" ]]; then
-        local lines=$(wc -l < "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | tr -d ' ')
-        if [[ "$lines" -gt 500 ]]; then
-            local tmp=$(mktemp 2>/dev/null) || return 0
-            tail -500 "$BASHTUTOR_SEQUENCES_FILE" > "$tmp" && mv "$tmp" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null || rm -f "$tmp"
-        fi
-    fi
-}
-
-function _bashtutor_suggest_next() {
-    local current_cmd="$1"
-    [[ -z "$current_cmd" || ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return 1
-
-    local curr_base=$(echo "$current_cmd" | awk '{print $1}')
-
-    # Count how many times each next-command followed this one
-    local suggestion=$(grep "^${curr_base}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
-        cut -d'|' -f4 | \
-        sort | uniq -c | sort -rn | \
-        awk '$1 >= 3 {print $2; exit}')
-
-    [[ -n "$suggestion" ]] && echo "$suggestion"
-    return 0
-}
-
-# =============================================================================
-# LOGGING
-# =============================================================================
-
-function _bashtutor_log() {
-    local level="$1" message="$2"
-    [[ "$level" != "ERROR" && "${BASHTUTOR_VERBOSE}" != "1" ]] && return 0
-    local ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
-    printf '[%s] [%s] %s\n' "$ts" "$level" "$message" >> "$BASHTUTOR_LOG_FILE" 2>/dev/null || true
-}
-
-# =============================================================================
-# IMPROVEMENT 4: DESTRUCTIVE COMMAND SAFETY NET
-# =============================================================================
-
-function _bashtutor_safety_check() {
+zle -N _bt_history_complete
+bindkey '^F' _bt_history_complete
+
+# ── destructive command warning ───────────────────────────────────────────────
+function _bt_preexec() {
+    export _BT_LAST_CMD="$1"
     local cmd="$1"
-    [[ -z "$cmd" ]] && return 0
-
-    local base_cmd=$(echo "$cmd" | awk '{print $1}')
-
-    # Pattern 1: rm -rf or rm -r (recursive delete)
-    if [[ "$cmd" =~ ^rm[[:space:]]+-r ]]; then
-        local target=$(echo "$cmd" | sed 's/^rm[[:space:]]*-r[^[:space:]]*[[:space:]]*//' | awk '{print $1}')
-        echo ""
-        _bt_warn "HEADS UP: This will permanently delete ${target} — no undo!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
-    # Pattern 2: rm on important directories
-    if [[ "$cmd" =~ ^rm[[:space:]]+ ]]; then
-        local target=$(echo "$cmd" | sed 's/^rm[[:space:]]*//' | awk '{print $1}')
-        if [[ "$target" =~ ^(/|~|~/Documents|~/Desktop|/.*) ]]; then
-            echo ""
-            _bt_warn "HEADS UP: This will permanently delete ${target} — no undo!"
-            echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-            sleep 2
-            return 0
-        fi
-    fi
-
-    # Pattern 3: chmod -R 777 (world-writable security risk)
-    if [[ "$cmd" =~ chmod[[:space:]]+-R[[:space:]]+777 ]]; then
-        local target=$(echo "$cmd" | sed 's/^chmod[[:space:]]*-R[[:space:]]*777[[:space:]]*//' | awk '{print $1}')
-        echo ""
-        _bt_warn "HEADS UP: This will make everything in ${target} readable by everyone on this computer!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
-    # Pattern 4: chmod -R on root or home
-    if [[ "$cmd" =~ chmod[[:space:]]+-R.*/[[:space:]] ]] || [[ "$cmd" =~ chmod[[:space:]]+-R.*~[[:space:]] ]]; then
-        local target=$(echo "$cmd" | sed 's/^chmod[[:space:]]*-R[[:space:]]*[^ ]*[[:space:]]*//' | awk '{print $1}')
-        echo ""
-        _bt_warn "HEADS UP: This will change permissions on ${target} and everything inside!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
-    # Pattern 5: dd commands (disk destroyer)
-    if [[ "$cmd" =~ ^dd[[:space:]] ]]; then
-        echo ""
-        _bt_warn "HEADS UP: This writes directly to a disk — one wrong path can wipe a drive!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
-    # Pattern 6: mkfs (format a drive)
-    if [[ "$cmd" =~ ^mkfs[[:space:]] ]]; then
-        echo ""
-        _bt_warn "HEADS UP: This will FORMAT a drive — all data will be gone!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
-    # Pattern 7: colon truncate (: > filename)
-    if [[ "$cmd" =~ ^:[[:space:]]*\> ]]; then
-        local target=$(echo "$cmd" | sed 's/^:[[:space:]]*>[[:space:]]*//' | awk '{print $1}')
-        echo ""
-        _bt_warn "HEADS UP: This will erase the contents of ${target}!"
-        echo "   Running it anyway in 2 seconds... (Ctrl+C to cancel)"
-        sleep 2
-        return 0
-    fi
-
+    case "$cmd" in
+        rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
+            printf "${_RE}${_B}  ⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
+            read -r _bt_ans
+            [[ "$_bt_ans" != [yY] ]] && return 1
+            ;;
+    esac
     return 0
 }
 
-# =============================================================================
-# HOOKS: capture every command
-# =============================================================================
-
-function bashtutor_preexec() {
-    export BASHTUTOR_LAST_COMMAND="$1"
+# ── level-aware system prompt ─────────────────────────────────────────────────
+function _bt_system_prompt() {
+    case "${BASHTUTOR_LEVEL:-beginner}" in
+        beginner)
+            echo "You are a bash teacher for beginners. Given a plain-English request, respond with EXACTLY two lines:
+COMMAND: <the exact bash/zsh command>
+EXPLANATION: <one plain-English sentence explaining what it does and why, avoiding jargon>
+No markdown, no extra lines, no code blocks." ;;
+        intermediate)
+            echo "You are a bash assistant. Given a request, respond with EXACTLY two lines:
+COMMAND: <the exact bash/zsh command>
+NOTE: <a short technical note about flags or behaviour — one line>
+No markdown, no extra lines." ;;
+        expert)
+            echo "You are a bash assistant. Given a request, respond with EXACTLY one line:
+COMMAND: <the exact bash/zsh command>
+Nothing else." ;;
+    esac
 }
 
-function bashtutor_precmd() {
-    local exit_code=$?
-    export BASHTUTOR_LAST_EXIT_CODE="$exit_code"
+# ── call Claude API ───────────────────────────────────────────────────────────
+function _bt_claude_call() {
+    local query="$1"
+    [[ -z "${ANTHROPIC_API_KEY:-}" ]] && return 1
 
-    [[ -z "$BASHTUTOR_LAST_COMMAND" ]] && return 0
+    local system_prompt
+    system_prompt=$(_bt_system_prompt)
 
-    local base_cmd=$(echo "$BASHTUTOR_LAST_COMMAND" | awk '{print $1}')
-    [[ "$base_cmd" =~ ^(bashtutor|bashme|bt|_bashtutor) ]] && return 0
+    local escaped_query escaped_system
+    escaped_query=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$query" 2>/dev/null) || return 1
+    escaped_system=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$system_prompt" 2>/dev/null) || return 1
 
-    _bashtutor_log_command "$BASHTUTOR_LAST_COMMAND" "$exit_code"
+    local payload
+    payload=$(printf '{"model":"%s","max_tokens":256,"system":%s,"messages":[{"role":"user","content":%s}]}' \
+        "$BASHTUTOR_MODEL" "$escaped_system" "$escaped_query")
 
-    # Smart explanation: only explain if interesting
-    if [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" ]]; then
-        if _bashtutor_is_interesting "$BASHTUTOR_LAST_COMMAND" "$exit_code"; then
-            _bashtutor_explain "$BASHTUTOR_LAST_COMMAND" "$exit_code"
-        fi
-    fi
-
-    # Proactive intervention: step in if user is struggling
-    _bashtutor_check_struggling "$BASHTUTOR_LAST_COMMAND" "$exit_code"
-
-    # Learning: record command sequences
-    _bashtutor_learn_sequence "$BASHTUTOR_LAST_COMMAND"
-
-    # Smart suggestions: if command succeeded, suggest what typically comes next
-    if [[ "$exit_code" -eq 0 ]]; then
-        if [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" || "${BASHTUTOR_SMART_SUGGEST}" == "1" ]]; then
-            local next_suggestion=$(_bashtutor_suggest_next "$BASHTUTOR_LAST_COMMAND")
-            if [[ -n "$next_suggestion" ]]; then
-                echo ""
-                _bt_tip "You usually run '${next_suggestion}' after this — type '${_BT_CYAN}bt do ${next_suggestion}${_BT_RESET}' or just run it"
-                echo ""
-            fi
-        fi
-    fi
-
-    export BASHTUTOR_LAST_COMMAND=""
-}
-
-# =============================================================================
-# HISTORY (JSONL format, safe escaping)
-# =============================================================================
-
-function _bashtutor_log_command() {
-    local cmd="$1" exit_code="${2:-0}"
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
-    local cwd=$(pwd 2>/dev/null || echo "unknown")
-    local escaped_cmd=$(_bashtutor_json_escape "$cmd")
-    local escaped_cwd=$(_bashtutor_json_escape "$cwd")
-
-    printf '{"timestamp":"%s","command":"%s","exit_code":%s,"cwd":"%s","session":"%s"}\n' \
-        "$timestamp" "$escaped_cmd" "$exit_code" "$escaped_cwd" "$$" \
-        >> "$BASHTUTOR_HISTORY_FILE" 2>/dev/null || true
-
-    _bashtutor_trim_history
-}
-
-function _bashtutor_trim_history() {
-    [[ ! -f "$BASHTUTOR_HISTORY_FILE" ]] && return 0
-    local max="${BASHTUTOR_MAX_HISTORY:-1000}"
-    local lines=$(wc -l < "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | tr -d ' ')
-    if [[ "$lines" -gt "$max" ]]; then
-        local tmp=$(mktemp 2>/dev/null) || return 0
-        tail -n "$max" "$BASHTUTOR_HISTORY_FILE" > "$tmp" && mv "$tmp" "$BASHTUTOR_HISTORY_FILE" 2>/dev/null || rm -f "$tmp"
-    fi
-}
-
-function _bashtutor_get_recent_history() {
-    local count="${1:-5}"
-    [[ ! -f "$BASHTUTOR_HISTORY_FILE" ]] && return 0
-    tail -$count "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | \
-        sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | \
-        sed 's/\\"/"/g; s/\\\\/\\/g'
-}
-
-# =============================================================================
-# CACHE (24h TTL)
-# =============================================================================
-
-function _bashtutor_cache_key() {
-    printf '%s' "$1" | cksum 2>/dev/null | awk '{print $1}'
-}
-
-function _bashtutor_cache_get() {
-    local key="$1"
-    local f="${BASHTUTOR_CACHE_DIR}/${key}.cache"
-    [[ ! -f "$f" ]] && return 1
-
-    local ttl_secs=$(( ${BASHTUTOR_CACHE_TTL:-24} * 3600 ))
-    local mtime=$(stat -f%m "$f" 2>/dev/null || stat -c%Y "$f" 2>/dev/null || echo 0)
-    local now=$(date +%s 2>/dev/null || echo 0)
-
-    if [[ $(( now - mtime )) -gt $ttl_secs ]]; then
-        rm -f "$f" 2>/dev/null
-        return 1
-    fi
-    cat "$f" 2>/dev/null
-}
-
-function _bashtutor_cache_set() {
-    local key="$1" value="$2"
-    printf '%s' "$value" > "${BASHTUTOR_CACHE_DIR}/${key}.cache" 2>/dev/null || true
-}
-
-function _bashtutor_cache_clear() {
-    rm -f "${BASHTUTOR_CACHE_DIR}"/*.cache 2>/dev/null
-    _bt_success "Cache cleared"
-}
-
-# =============================================================================
-# AI: Claude API inference
-# =============================================================================
-
-function _bashtutor_ask_claude() {
-    local prompt="$1"
-    local timeout_secs="${2:-20}"
-
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        return 1
-    fi
-
-    # Escape the prompt for JSON
-    local escaped_prompt=$(_bashtutor_json_escape "$prompt")
-
-    local result
-    result=$(timeout "$timeout_secs" curl -s \
-        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+    local response
+    response=$(curl -sf \
+        -H "x-api-key: $ANTHROPIC_API_KEY" \
         -H "anthropic-version: 2023-06-01" \
         -H "content-type: application/json" \
-        -d "{\"model\":\"${BASHTUTOR_CLAUDE_MODEL}\",\"max_tokens\":256,\"messages\":[{\"role\":\"user\",\"content\":\"${escaped_prompt}\"}]}" \
-        "https://api.anthropic.com/v1/messages" 2>/dev/null)
+        -d "$payload" \
+        "https://api.anthropic.com/v1/messages" 2>/dev/null) || return 1
 
-    if [[ -n "$result" ]]; then
-        # Extract text from Claude's response JSON
-        local text
-        text=$(echo "$result" | python3 -c "
-import json,sys
+    python3 -c "
+import json, sys
 try:
-    d=json.load(sys.stdin)
-    if 'content' in d and d['content']:
-        print(d['content'][0].get('text','').strip())
-except: pass
-" 2>/dev/null)
-        if [[ -n "$text" ]]; then
-            echo "$text"
-            return 0
-        fi
-    fi
-
-    return 1
+    d = json.loads(sys.argv[1])
+    print(d['content'][0]['text'].strip())
+except:
+    sys.exit(1)
+" "$response" 2>/dev/null
 }
 
-# =============================================================================
-# EXPLANATION ENGINE
-# =============================================================================
-
-function _bashtutor_explain() {
-    local cmd="$1" exit_code="${2:-0}"
-    local explanation=$(_bashtutor_get_explanation "$cmd" "$exit_code")
-
-    if [[ -n "$explanation" ]]; then
-        echo ""
-        _bt_explain "$explanation"
-        echo ""
-    fi
+# ── local fallback pattern lookup ─────────────────────────────────────────────
+# Compact fallback covering the most common requests
+function _bt_local_lookup() {
+    local q="${1:l}"
+    _BT_CMD="" _BT_NOTE_B="" _BT_NOTE_I=""
+    case "$q" in
+        *list*file*|*show*file*|*what*here*) _BT_CMD="ls -la"; _BT_NOTE_B="Lists all files including hidden"; _BT_NOTE_I="# -l=details -a=hidden" ;;
+        *creat*folder*|*mkdir*) _BT_CMD="mkdir -p folder"; _BT_NOTE_B="Creates a folder"; _BT_NOTE_I="# -p=ok if exists" ;;
+        *delet*folder*|*remov*folder*) _BT_CMD="rm -rf folder"; _BT_NOTE_B="Deletes folder and contents — no undo!"; _BT_NOTE_I="# CAREFUL" ;;
+        *delet*file*|*remov*file*) _BT_CMD="rm filename"; _BT_NOTE_B="Deletes a file permanently"; _BT_NOTE_I="# no recycle bin" ;;
+        *copy*file*) _BT_CMD="cp source dest"; _BT_NOTE_B="Copies a file"; _BT_NOTE_I="# -r for folders" ;;
+        *move*|*renam*) _BT_CMD="mv old new"; _BT_NOTE_B="Moves or renames a file"; _BT_NOTE_I="# same command" ;;
+        *search*text*|*find*text*|*grep*) _BT_CMD="grep -r 'pattern' ."; _BT_NOTE_B="Searches for text in all files"; _BT_NOTE_I="# -i=case-insensitive -n=line numbers" ;;
+        *find*file*) _BT_CMD="find . -name '*.txt'"; _BT_NOTE_B="Finds files by name"; _BT_NOTE_I="# * is wildcard" ;;
+        *disk*space*|*free*space*) _BT_CMD="df -h"; _BT_NOTE_B="Shows free disk space"; _BT_NOTE_I="# -h=human readable" ;;
+        *folder*size*|*du*) _BT_CMD="du -sh *"; _BT_NOTE_B="Shows folder sizes"; _BT_NOTE_I="# -s=summary -h=human" ;;
+        *compress*|*archive*|*tar*) _BT_CMD="tar -czf out.tar.gz folder/"; _BT_NOTE_B="Compresses a folder"; _BT_NOTE_I="# -c=create -z=gzip" ;;
+        *extract*|*unpack*) _BT_CMD="tar -xzf archive.tar.gz"; _BT_NOTE_B="Extracts an archive"; _BT_NOTE_I="# -x=extract -z=gzip" ;;
+        *permiss*|*chmod*) _BT_CMD="chmod 755 file"; _BT_NOTE_B="Sets read/write/execute permissions"; _BT_NOTE_I="# 7=all 5=read+exec" ;;
+        *git*status*|*what*changed*) _BT_CMD="git status"; _BT_NOTE_B="Shows changed files"; _BT_NOTE_I="# -s=short" ;;
+        *git*commit*) _BT_CMD="git commit -m 'message'"; _BT_NOTE_B="Saves staged changes"; _BT_NOTE_I="# -am=stage+commit" ;;
+        *git*push*) _BT_CMD="git push"; _BT_NOTE_B="Uploads commits to remote"; _BT_NOTE_I="# -u origin main to set upstream" ;;
+        *git*pull*) _BT_CMD="git pull"; _BT_NOTE_B="Downloads latest changes"; _BT_NOTE_I="# fetch + merge" ;;
+        *git*branch*) _BT_CMD="git checkout -b branch"; _BT_NOTE_B="Creates and switches to new branch"; _BT_NOTE_I="# git branch to list" ;;
+        *port*|*listen*) _BT_CMD="lsof -i -P | grep LISTEN"; _BT_NOTE_B="Shows open ports"; _BT_NOTE_I="# -P=port numbers" ;;
+        *process*|*running*) _BT_CMD="ps aux"; _BT_NOTE_B="Lists all running processes"; _BT_NOTE_I="# | grep name to filter" ;;
+        *kill*process*) _BT_CMD="pkill -f name"; _BT_NOTE_B="Stops a process by name"; _BT_NOTE_I="# kill PID for by ID" ;;
+        *download*|*curl*) _BT_CMD="curl -O https://url/file"; _BT_NOTE_B="Downloads a file"; _BT_NOTE_I="# -L=follow redirects" ;;
+        *ssh*|*remote*server*) _BT_CMD="ssh user@host"; _BT_NOTE_B="Connects to a remote server"; _BT_NOTE_I="# -i=key file" ;;
+        *pipe*|*chain*) _BT_CMD="cmd1 | cmd2"; _BT_NOTE_B="Sends output of cmd1 into cmd2"; _BT_NOTE_I="# stdout → stdin" ;;
+        *save*output*|*redirect*) _BT_CMD="command > file.txt"; _BT_NOTE_B="Saves output to a file"; _BT_NOTE_I="# >> to append" ;;
+        *for*loop*) _BT_CMD='for f in *; do echo "$f"; done'; _BT_NOTE_B="Loops over items"; _BT_NOTE_I="# $f = current item" ;;
+        *alias*) _BT_CMD="alias ll='ls -la'"; _BT_NOTE_B="Creates a command shortcut"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
+        *reload*config*|*source*zshrc*) _BT_CMD="source ~/.zshrc"; _BT_NOTE_B="Reloads your shell config"; _BT_NOTE_I="# . ~/.zshrc also works" ;;
+        *) return 1 ;;
+    esac
+    return 0
 }
 
-function _bashtutor_get_explanation() {
-    local cmd="$1" exit_code="${2:-0}"
+# ── display Claude response ───────────────────────────────────────────────────
+function _bt_display_ai() {
+    local raw="$1"
+    local level="${BASHTUTOR_LEVEL:-beginner}"
+    local cmd note
 
-    # Check cache first
-    local cache_key=$(_bashtutor_cache_key "explain_${cmd}")
-    if [[ -n "$cache_key" ]]; then
-        local cached=$(_bashtutor_cache_get "$cache_key")
-        [[ -n "$cached" ]] && { echo "$cached"; return 0; }
-    fi
-
-    # Try OpenClaw
-    local explanation=""
-    if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        local prompt="Explain this bash command in one plain sentence (max 80 characters). No jargon. Be friendly and clear.
-
-Command: $cmd
-Exit code: $exit_code (0 = success, anything else = failed)"
-
-        explanation=$(_bashtutor_ask_claude "$prompt" 10)
-    fi
-
-    # Fall back to local
-    [[ -z "$explanation" ]] && explanation=$(_bashtutor_local_explain "$cmd" "$exit_code")
-
-    # Cache it
-    [[ -n "$cache_key" && -n "$explanation" ]] && _bashtutor_cache_set "$cache_key" "$explanation"
-
-    echo "$explanation"
-}
-
-function _bashtutor_local_explain() {
-    local cmd="$1" exit_code="${2:-0}"
-    local base_cmd=$(echo "$cmd" | awk '{print $1}' 2>/dev/null)
-    local explanation="${BASHTUTOR_EXPLANATIONS[$base_cmd]}"
-
-    [[ -z "$explanation" ]] && explanation="Ran the '${base_cmd}' command"
-
-    if [[ "$exit_code" -ne 0 ]]; then
-        explanation="${explanation} — but something went wrong (exit code ${exit_code})"
-    fi
-
-    echo "$explanation"
-}
-
-# =============================================================================
-# EXPLAIN LAST COMMAND (Ctrl+B)
-# =============================================================================
-
-function bashtutor_explain_last() {
-    local cmd="" exit_code=0
-
-    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        local last=$(tail -1 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null)
-        if [[ -n "$last" ]]; then
-            cmd=$(echo "$last" | sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | sed 's/\\"/"/g; s/\\\\/\\/g')
-            exit_code=$(echo "$last" | sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p')
-        fi
-    fi
-
-    [[ -z "$cmd" ]] && cmd=$(fc -ln -1 2>/dev/null | sed 's/^[[:space:]]*//')
-    [[ -z "$cmd" ]] && { _bt_warn "No previous command found"; return 1; }
+    cmd=$(echo "$raw" | grep '^COMMAND:' | sed 's/^COMMAND: *//')
+    [[ -z "$cmd" ]] && { _bt_err "Unexpected response format"; echo "$raw"; return 1; }
 
     echo ""
-    echo "${_BT_BOLD}${_BT_WHITE}Last command:${_BT_RESET} ${_BT_BLUE}$cmd${_BT_RESET}"
-    _bashtutor_explain "$cmd" "${exit_code:-0}"
-}
-
-# =============================================================================
-# MAIN COMMAND: bashme
-# =============================================================================
-
-function bashme() {
-    local request="$*"
-
-    if [[ -z "$request" || "$request" == "help" || "$request" == "--help" ]]; then
-        echo ""
-        echo "${_BT_ORANGE}${_BT_BOLD}  Ba\$h \\${_BT_RESET}"
-        echo "${_BT_GREEN}${_BT_BOLD}  / Tutor${_BT_RESET}${_BT_WHITE}  ~  bash for humans${_BT_RESET}  ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}"
-        echo "${_BT_GREEN}  ──────────────────────────────────────────────${_BT_RESET}"
-        echo ""
-        echo "  ${_BT_BOLD}The main command:${_BT_RESET}"
-        echo "  ${_BT_ORANGE}${_BT_BOLD}qq${_BT_RESET} ${_BT_WHITE}just tell it what you want in plain English${_BT_RESET}"
-        echo ""
-        echo "  ${_BT_BOLD}Examples:${_BT_RESET}"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} show files modified today"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} find all pdfs in downloads"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} how much disk space am i using"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} install the requests python package"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} copy everything from desktop to documents"
-        echo ""
-        echo "  ${_BT_BOLD}Explain any command — paste it and add 'what':${_BT_RESET}"
-        echo "  ${_BT_ORANGE}qq${_BT_RESET} find . -name '*.log' -delete ${_BT_YELLOW}what${_BT_RESET}"
-        echo ""
-        echo "  ${_BT_BOLD}Other shortcuts:${_BT_RESET}"
-        echo "  ${_BT_GREEN}Ctrl+B${_BT_RESET}    explain the last command you ran"
-        echo "  ${_BT_GREEN}→ / Tab${_BT_RESET}   accept ghost autocomplete suggestion"
-        echo "  ${_BT_GREEN}bth${_BT_RESET}       show your command history"
-        echo "  ${_BT_GREEN}bashtutor_status${_BT_RESET}  show plugin status"
-        echo ""
-        echo "${_BT_GREEN}  ──────────────────────────────────────────────${_BT_RESET}"
-        echo ""
-        return 0
-    fi
-
-    # -------------------------------------------------------------------------
-    # WHAT? MODE — explain a command instead of suggesting one
-    # Usage: bashme <any command> what?
-    # -------------------------------------------------------------------------
-    if [[ "$request" == *" what?" || "$request" == *" what" || "$request" == "what?"* ]]; then
-        local cmd_to_explain="${request% what?}"
-        cmd_to_explain="${cmd_to_explain% what}"
-        cmd_to_explain="${cmd_to_explain#what? }"
-        cmd_to_explain="${cmd_to_explain#what }"
-        cmd_to_explain="$(echo "$cmd_to_explain" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-
-        echo ""
-        echo "${_BT_BOLD}${_BT_WHITE}Explaining:${_BT_RESET} ${_BT_BLUE}${cmd_to_explain}${_BT_RESET}"
-        echo ""
-
-        local explanation=""
-
-        if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-            _bt_thinking
-            local what_prompt="Explain this command in plain English. No jargon. Be friendly and clear. Use 2-4 short sentences. Break it down piece by piece if it has multiple parts.
-
-Command: ${cmd_to_explain}
-
-Format your answer like:
-What it does: [one sentence summary]
-How it works: [break down each part simply]
-Watch out: [any gotchas or risks, or skip this if none]"
-
-            explanation=$(_bashtutor_ask_claude "$what_prompt" 20)
-        fi
-
-        if [[ -n "$explanation" ]]; then
-            echo "$explanation" | while IFS= read -r line; do
-                echo "  ${_BT_CYAN}${line}${_BT_RESET}"
-            done
-        else
-            local base=$(echo "$cmd_to_explain" | awk '{print $1}')
-            local local_exp="${BASHTUTOR_EXPLANATIONS[$base]}"
-            if [[ -n "$local_exp" ]]; then
-                _bt_explain "$local_exp"
-                echo ""
-                _bt_tip "Set ANTHROPIC_API_KEY for a full breakdown"
-            else
-                _bt_warn "Not sure what '$base' does — add your API key for full explanations"
-            fi
-        fi
-        echo ""
-        return 0
-    fi
-
-    # Build prompt with history context
-    local history_context=""
-    if [[ -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        local recent=$(_bashtutor_get_recent_history 3)
-        [[ -n "$recent" ]] && history_context="
-Recent commands for context:
-$recent"
-    fi
-
-    local prompt="You are a helpful bash and Python tutor. Give ONLY the command, nothing else — no explanation, no markdown, no code fences.
-
-Rules:
-- For shell/file/system tasks: give a zsh/bash command
-- For Python tasks (install packages, run scripts, virtual envs, pip): give the correct shell command to do it (e.g. pip3 install X, python3 script.py, python3 -m venv env)
-- For 'write a python script that does X': give a python3 one-liner or the python3 command to run an inline script using -c flag
-- macOS, zsh shell
-- IMPORTANT: Never use bare 'find .' without -maxdepth. Always add -maxdepth 2 or less to avoid scanning the entire home folder. For 'modified today' use: find . -maxdepth 2 -mtime -1 -type f
-- Keep commands short, safe, and scoped to the current directory unless the user specifies otherwise
-
-Task: $request${history_context}
-
-Reply with just the command."
-
-    # Try OpenClaw
-    if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        echo ""
-        _bt_thinking
-
-        local result=$(_bashtutor_ask_claude "$prompt" 20)
-
-        if [[ -n "$result" ]]; then
-            # Strip markdown fences if OpenClaw wraps output
-            result=$(echo "$result" | sed 's/^```[a-z]*//; s/^```//' | sed '/^$/d' | head -5)
-
-            echo ""
-            echo "${_BT_BOLD}${_BT_WHITE}Here's the command:${_BT_RESET}"
-            echo ""
-            _bt_cmd "$result"
-            echo ""
-            _bt_tip "Press ${_BT_BOLD}Ctrl+B${_BT_RESET} after running it to get an explanation"
-            echo ""
-
-            # Copy to clipboard on macOS
-            if command -v pbcopy &>/dev/null; then
-                echo "$result" | pbcopy 2>/dev/null && \
-                    echo "${_BT_YELLOW}  (copied to clipboard — just paste it!)${_BT_RESET}" && \
-                    echo ""
-            fi
-            return 0
-        fi
-
-        _bt_warn "Claude didn't respond — using local patterns instead"
-    else
-        _bt_warn "Claude API key not set — using local patterns"
-        echo "  Get a free key at: ${_BT_CYAN}console.anthropic.com${_BT_RESET}"
-        echo "  Then add to your ~/.zshrc:"
-        echo "    ${_BT_YELLOW}export ANTHROPIC_API_KEY=\"sk-ant-...\"${_BT_RESET}"
-        echo ""
-    fi
-
-    # Local fallback — pattern matching
-    _bashtutor_local_suggest "$request"
-}
-
-# =============================================================================
-# LOCAL PATTERN SUGGESTIONS (offline fallback)
-# =============================================================================
-
-function _bashtutor_local_suggest() {
-    local request="$1"
-    local req_lower=$(echo "$request" | tr '[:upper:]' '[:lower:]')
-
-    local suggestion=""
-
-    # File listing
-    if [[ "$req_lower" =~ (show|list|see).*(file|folder|director) ]]; then
-        if [[ "$req_lower" =~ (detail|size|date|long) ]]; then
-            suggestion="ls -la"
-        elif [[ "$req_lower" =~ (hidden|all) ]]; then
-            suggestion="ls -a"
-        else
-            suggestion="ls -l"
-        fi
-    elif [[ "$req_lower" =~ (modified|changed|recent).*(today|last) ]]; then
-        suggestion="find . -maxdepth 1 -newer \$(date -v-1d +%Y%m%d) -type f 2>/dev/null || find . -maxdepth 1 -mtime -1 -type f"
-    elif [[ "$req_lower" =~ (find|search).*(file|folder) ]]; then
-        if [[ "$req_lower" =~ pdf ]]; then
-            suggestion="find ~/Downloads -name '*.pdf' -type f"
-        elif [[ "$req_lower" =~ (name|called) ]]; then
-            suggestion="find . -name '*FILENAME*' -type f"
-        else
-            suggestion="find . -type f -name '*SEARCH*'"
-        fi
-    # Disk / space
-    elif [[ "$req_lower" =~ (disk|space|storage|how much) ]]; then
-        if [[ "$req_lower" =~ (folder|director|here) ]]; then
-            suggestion="du -sh *"
-        else
-            suggestion="df -h"
-        fi
-    # Copy / move
-    elif [[ "$req_lower" =~ (copy|cp).*(folder|director) ]]; then
-        suggestion="cp -r SOURCE DESTINATION"
-    elif [[ "$req_lower" =~ copy ]]; then
-        suggestion="cp SOURCE DESTINATION"
-    elif [[ "$req_lower" =~ (move|rename) ]]; then
-        suggestion="mv SOURCE DESTINATION"
-    # Delete
-    elif [[ "$req_lower" =~ (delete|remove|rm).*(folder|director) ]]; then
-        suggestion="rm -rf FOLDER  # ⚠️  no undo — be careful!"
-    elif [[ "$req_lower" =~ (delete|remove) ]]; then
-        suggestion="rm FILENAME"
-    # Create
-    elif [[ "$req_lower" =~ (create|make|new).*(folder|director) ]]; then
-        suggestion="mkdir -p FOLDERNAME"
-    elif [[ "$req_lower" =~ (create|make|new).*(file) ]]; then
-        suggestion="touch FILENAME"
-    # Process / running
-    elif [[ "$req_lower" =~ (running|process|cpu|memory|ram) ]]; then
-        suggestion="ps aux | head -20"
-    elif [[ "$req_lower" =~ (kill|stop|quit).*(process|app|program) ]]; then
-        suggestion="kill -9 PID  # replace PID with the process ID number"
-    # Network
-    elif [[ "$req_lower" =~ (download|fetch|get).*(file|url|http) ]]; then
-        suggestion="curl -O URL"
-    elif [[ "$req_lower" =~ (internet|network|online|connected) ]]; then
-        suggestion="ping -c 3 google.com"
-    # Git
-    elif [[ "$req_lower" =~ git.*(status|what) ]]; then
-        suggestion="git status"
-    elif [[ "$req_lower" =~ git.*(save|commit) ]]; then
-        suggestion="git add . && git commit -m 'your message here'"
-    elif [[ "$req_lower" =~ git.*(push|upload|send) ]]; then
-        suggestion="git push"
-    elif [[ "$req_lower" =~ git.*(pull|update|download) ]]; then
-        suggestion="git pull"
-    # Zip/archive
-    elif [[ "$req_lower" =~ (zip|compress|archive) ]]; then
-        suggestion="zip -r archive.zip FOLDER/"
-    elif [[ "$req_lower" =~ (unzip|extract|uncompress) ]]; then
-        suggestion="unzip archive.zip"
-    # Permissions
-    elif [[ "$req_lower" =~ (permission|executable|run|chmod) ]]; then
-        suggestion="chmod +x FILENAME"
-    # History
-    elif [[ "$req_lower" =~ (history|previous|last.*command) ]]; then
-        suggestion="history | tail -20"
-    # Current location
-    elif [[ "$req_lower" =~ (where.*(am i|are we)|current.*(folder|director|path)|location) ]]; then
-        suggestion="pwd"
-    # Text search
-    elif [[ "$req_lower" =~ (search|find|grep).*(text|word|string|in) ]]; then
-        suggestion="grep -r 'SEARCH_TERM' ."
-    # File size
-    elif [[ "$req_lower" =~ (size|big|large|small).*(file) ]]; then
-        suggestion="ls -lhS | head -10  # largest files first"
-    # File operations — count/manipulate
-    elif [[ "$req_lower" =~ count.*(file|line) ]]; then
-        if [[ "$req_lower" =~ line ]]; then
-            suggestion="wc -l FILENAME"
-        else
-            suggestion="ls | wc -l"
-        fi
-    elif [[ "$req_lower" =~ (empty|erase|clear).*(file) ]]; then
-        suggestion="> FILENAME"
-    elif [[ "$req_lower" =~ (append|add).*(file|end) ]]; then
-        suggestion="echo \"text\" >> FILENAME"
-    elif [[ "$req_lower" =~ (follow|watch|tail).*(log) ]]; then
-        suggestion="tail -f FILENAME"
-    elif [[ "$req_lower" =~ (show|print).*(last|end) ]]; then
-        suggestion="tail -100 FILENAME"
-    elif [[ "$req_lower" =~ (find|search).*(large|big).*(file) ]]; then
-        suggestion="find . -size +100M -type f"
-    elif [[ "$req_lower" =~ (find|search).*(recent|modified) ]]; then
-        suggestion="find . -mtime -1 -type f"
-    elif [[ "$req_lower" =~ (check|test).*(exist|exist) ]]; then
-        suggestion="test -f FILENAME && echo \"exists\" || echo \"not found\""
-    elif [[ "$req_lower" =~ (type|kind).*(file|file) ]]; then
-        suggestion="file FILENAME"
-    elif [[ "$req_lower" =~ (encoding|charset).*(file) ]]; then
-        suggestion="file -I FILENAME"
-    elif [[ "$req_lower" =~ (symlink|link).*(target|point) ]]; then
-        suggestion="readlink -f LINK"
-    elif [[ "$req_lower" =~ (create|make).*(symlink|link) ]]; then
-        suggestion="ln -s TARGET LINK_NAME"
-    elif [[ "$req_lower" =~ (bulk|mass|many).*(rename) ]]; then
-        suggestion="for f in *.old; do mv \"\$f\" \"\${f%.old}.new\"; done"
-    # Python — run a script
-    elif [[ "$req_lower" =~ (run|execute).*(python|py).*(script|file) ]]; then
-        suggestion="python3 SCRIPT.py"
-    elif [[ "$req_lower" =~ (run|execute).*\.py ]]; then
-        suggestion="python3 SCRIPT.py"
-    # Python — install a package
-    elif [[ "$req_lower" =~ (install|add).*(python|pip).*(package|library|module) ]] || \
-         [[ "$req_lower" =~ (pip|pip3).*(install) ]] || \
-         [[ "$req_lower" =~ install.*python.* ]]; then
-        suggestion="pip3 install PACKAGE_NAME"
-    # Python — uninstall a package
-    elif [[ "$req_lower" =~ (uninstall|remove).*(python|pip).*(package) ]]; then
-        suggestion="pip3 uninstall PACKAGE_NAME"
-    # Python — list installed packages
-    elif [[ "$req_lower" =~ (list|show).*(python|pip).*(package|install) ]]; then
-        suggestion="pip3 list"
-    # Python — virtual environment
-    elif [[ "$req_lower" =~ (create|make|new).*(virtual|venv|env) ]]; then
-        suggestion="python3 -m venv env && source env/bin/activate"
-    elif [[ "$req_lower" =~ (activate).*(virtual|venv|env) ]]; then
-        suggestion="source env/bin/activate"
-    elif [[ "$req_lower" =~ (deactivate|exit).*(virtual|venv|env) ]]; then
-        suggestion="deactivate"
-    # Python — check version
-    elif [[ "$req_lower" =~ (python).*(version|which|where) ]]; then
-        suggestion="python3 --version && which python3"
-    # Python — run a one-liner
-    elif [[ "$req_lower" =~ (python).*(print|calculate|convert|quick) ]]; then
-        suggestion="python3 -c 'print(YOUR_CODE_HERE)'"
-    # Python — requirements
-    elif [[ "$req_lower" =~ (install).*(requirements|req) ]]; then
-        suggestion="pip3 install -r requirements.txt"
-    elif [[ "$req_lower" =~ (save|export|freeze).*(requirements|packages) ]]; then
-        suggestion="pip3 freeze > requirements.txt"
-    elif [[ "$req_lower" =~ (upgrade|update).*(pip) ]]; then
-        suggestion="pip3 install --upgrade pip"
-    # Homebrew
-    elif [[ "$req_lower" =~ (brew|homebrew).*(install) ]]; then
-        suggestion="brew install PACKAGE"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(uninstall|remove) ]]; then
-        suggestion="brew uninstall PACKAGE"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(update|upgrade) ]]; then
-        suggestion="brew update && brew upgrade"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(list|show) ]]; then
-        suggestion="brew list"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(search) ]]; then
-        suggestion="brew search QUERY"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(info) ]]; then
-        suggestion="brew info PACKAGE"
-    elif [[ "$req_lower" =~ (brew|homebrew).*(doctor) ]]; then
-        suggestion="brew doctor"
-    # Node.js / npm
-    elif [[ "$req_lower" =~ (npm|node).*(init) ]]; then
-        suggestion="npm init -y"
-    elif [[ "$req_lower" =~ (npm|node).*(install|package) ]]; then
-        suggestion="npm install PACKAGE"
-    elif [[ "$req_lower" =~ (npm|node).*(dev|development) ]]; then
-        suggestion="npm install --save-dev PACKAGE"
-    elif [[ "$req_lower" =~ (npm|node).*(list|packages) ]]; then
-        suggestion="npm list"
-    elif [[ "$req_lower" =~ (npm|node).*(run|script) ]]; then
-        suggestion="npm run SCRIPT"
-    elif [[ "$req_lower" =~ (npm|node).*(start) ]]; then
-        suggestion="npm start"
-    elif [[ "$req_lower" =~ (npm|node).*(build) ]]; then
-        suggestion="npm run build"
-    elif [[ "$req_lower" =~ (npm|node).*(update|upgrade) ]]; then
-        suggestion="npm update"
-    elif [[ "$req_lower" =~ (npm|node).*(audit|security) ]]; then
-        suggestion="npm audit fix"
-    # Git (expanded)
-    elif [[ "$req_lower" =~ git.*(log|history) ]]; then
-        suggestion="git log --oneline -20"
-    elif [[ "$req_lower" =~ git.*(diff|different) ]]; then
-        suggestion="git diff"
-    elif [[ "$req_lower" =~ git.*(branch) ]]; then
-        suggestion="git branch -a"
-    elif [[ "$req_lower" =~ git.*(create|new).*(branch) ]]; then
-        suggestion="git checkout -b BRANCH_NAME"
-    elif [[ "$req_lower" =~ git.*(switch|checkout).*(branch) ]]; then
-        suggestion="git checkout BRANCH_NAME"
-    elif [[ "$req_lower" =~ git.*(merge) ]]; then
-        suggestion="git merge BRANCH_NAME"
-    elif [[ "$req_lower" =~ git.*(stash) ]]; then
-        if [[ "$req_lower" =~ (pop|restore) ]]; then
-            suggestion="git stash pop"
-        else
-            suggestion="git stash"
-        fi
-    elif [[ "$req_lower" =~ git.*(clone) ]]; then
-        suggestion="git clone URL"
-    elif [[ "$req_lower" =~ git.*(remote) ]]; then
-        suggestion="git remote -v"
-    elif [[ "$req_lower" =~ git.*(undo|revert).*(commit) ]]; then
-        suggestion="git reset HEAD~1"
-    elif [[ "$req_lower" =~ git.*(discard|forget).*(change) ]]; then
-        suggestion="git checkout -- ."
-    elif [[ "$req_lower" =~ git.*(tag) ]]; then
-        suggestion="git tag v1.0.0"
-    elif [[ "$req_lower" =~ git.*(blame) ]]; then
-        suggestion="git blame FILENAME"
-    # Docker
-    elif [[ "$req_lower" =~ docker.*(list|show).*(container) ]]; then
-        suggestion="docker ps"
-    elif [[ "$req_lower" =~ docker.*(all|every).*(container) ]]; then
-        suggestion="docker ps -a"
-    elif [[ "$req_lower" =~ docker.*(run|start).*(container) ]]; then
-        suggestion="docker run -it IMAGE"
-    elif [[ "$req_lower" =~ docker.*(stop).*(container) ]]; then
-        suggestion="docker stop CONTAINER"
-    elif [[ "$req_lower" =~ docker.*(remove|delete).*(container) ]]; then
-        suggestion="docker rm CONTAINER"
-    elif [[ "$req_lower" =~ docker.*(list|show).*(image) ]]; then
-        suggestion="docker images"
-    elif [[ "$req_lower" =~ docker.*(pull|download).*(image) ]]; then
-        suggestion="docker pull IMAGE"
-    elif [[ "$req_lower" =~ docker.*(build).*(image) ]]; then
-        suggestion="docker build -t NAME ."
-    elif [[ "$req_lower" =~ docker.*(logs|output) ]]; then
-        suggestion="docker logs CONTAINER"
-    elif [[ "$req_lower" =~ docker.*(exec|into).*(container) ]]; then
-        suggestion="docker exec -it CONTAINER bash"
-    elif [[ "$req_lower" =~ docker.*(compose|multi).*(container) ]]; then
-        if [[ "$req_lower" =~ (down|stop) ]]; then
-            suggestion="docker-compose down"
-        else
-            suggestion="docker-compose up -d"
-        fi
-    # macOS specific
-    elif [[ "$req_lower" =~ (mac|mac).*(specs|info|about|hardware) ]]; then
-        suggestion="system_profiler SPHardwareDataType"
-    elif [[ "$req_lower" =~ (battery|charge|power) ]]; then
-        suggestion="pmset -g batt"
-    elif [[ "$req_lower" =~ (wifi|wireless|network).*(connect) ]]; then
-        suggestion="networksetup -getairportnetwork en0"
-    elif [[ "$req_lower" =~ (port|listening|open) ]]; then
-        suggestion="lsof -i -P -n | grep LISTEN"
-    elif [[ "$req_lower" =~ (flush|clear).*(dns) ]]; then
-        suggestion="sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder"
-    elif [[ "$req_lower" =~ (firewall) ]]; then
-        suggestion="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate"
-    elif [[ "$req_lower" =~ (kill|port).*(port|port) ]]; then
-        suggestion="lsof -ti:PORT | xargs kill -9"
-    elif [[ "$req_lower" =~ (who|using).*(port) ]]; then
-        suggestion="lsof -i :PORT"
-    elif [[ "$req_lower" =~ (ip|address|ip) ]]; then
-        suggestion="ipconfig getifaddr en0"
-    elif [[ "$req_lower" =~ (network|interface|interface) ]]; then
-        suggestion="ifconfig"
-    elif [[ "$req_lower" =~ (public|external).*(ip|address) ]]; then
-        suggestion="curl -s ifconfig.me"
-    # System info (expanded)
-    elif [[ "$req_lower" =~ (cpu|memory|load|running).*(process|process) ]]; then
-        suggestion="ps aux --sort=-%cpu | head -10"
-    elif [[ "$req_lower" =~ (memory|ram).*(top|most) ]]; then
-        suggestion="ps aux | sort -rk 4 | head -10"
-    elif [[ "$req_lower" =~ (disk|io|input|output) ]]; then
-        suggestion="iostat 1 5"
-    elif [[ "$req_lower" =~ (load|system).*(load) ]]; then
-        suggestion="uptime"
-
-    # Files — last/newest/oldest/recent
-    elif [[ "$req_lower" =~ (last|latest|newest|most.recent).*(file|created|made) ]]; then
-        suggestion="ls -lt | head -5"
-    elif [[ "$req_lower" =~ (oldest|first).*(file) ]]; then
-        suggestion="ls -ltr | head -5"
-    elif [[ "$req_lower" =~ (biggest|largest).*(file) ]]; then
-        suggestion="ls -lS | head -10"
-    elif [[ "$req_lower" =~ (what|which).*(file).*(here|folder|current) ]]; then
-        suggestion="ls -la"
-    elif [[ "$req_lower" =~ (how many).*(file) ]]; then
-        suggestion="ls | wc -l"
-    elif [[ "$req_lower" =~ (show|open|read|view|print|cat).*(file) ]]; then
-        suggestion="cat FILENAME"
-    elif [[ "$req_lower" =~ (first|top|beginning).*(file|lines) ]]; then
-        suggestion="head -20 FILENAME"
-    elif [[ "$req_lower" =~ (last|bottom|end).*(file|lines) ]]; then
-        suggestion="tail -20 FILENAME"
-
-    # Navigation
-    elif [[ "$req_lower" =~ (go|navigate|change).*(home) ]]; then
-        suggestion="cd ~"
-    elif [[ "$req_lower" =~ (go|navigate|change).*(back|previous|up) ]]; then
-        suggestion="cd .."
-    elif [[ "$req_lower" =~ (go|navigate|change).*(desktop) ]]; then
-        suggestion="cd ~/Desktop"
-    elif [[ "$req_lower" =~ (go|navigate|change).*(downloads) ]]; then
-        suggestion="cd ~/Downloads"
-    elif [[ "$req_lower" =~ (go|navigate|change).*(documents) ]]; then
-        suggestion="cd ~/Documents"
-
-    # macOS apps / open
-    elif [[ "$req_lower" =~ (open|launch).*(finder) ]]; then
-        suggestion="open ."
-    elif [[ "$req_lower" =~ (open|launch).*(app) ]]; then
-        suggestion="open -a 'APP NAME'"
-    elif [[ "$req_lower" =~ open.*(folder|director) ]]; then
-        suggestion="open FOLDER"
-    elif [[ "$req_lower" =~ open.*(file) ]]; then
-        suggestion="open FILENAME"
-    elif [[ "$req_lower" =~ (open|edit).*(zshrc|shell config|shell profile) ]]; then
-        suggestion="open ~/.zshrc"
-    elif [[ "$req_lower" =~ (reload|refresh|restart).*(shell|zshrc|terminal) ]]; then
-        suggestion="source ~/.zshrc"
-
-    # Environment / variables
-    elif [[ "$req_lower" =~ (show|list|see).*(env|environment|variable) ]]; then
-        suggestion="env | sort"
-    elif [[ "$req_lower" =~ (set|add|export).*(variable|env) ]]; then
-        suggestion="export MY_VAR='value'"
-    elif [[ "$req_lower" =~ (path|\$path) ]]; then
-        suggestion="echo \$PATH | tr ':' '\n'"
-
-    # Processes / apps
-    elif [[ "$req_lower" =~ (top|activity|monitor).*(process|app|cpu) ]]; then
-        suggestion="top -o cpu"
-    elif [[ "$req_lower" =~ (what|which).*(running|open|active) ]]; then
-        suggestion="ps aux | grep -v grep | head -20"
-    elif [[ "$req_lower" =~ (force|quit|kill).*(app) ]]; then
-        suggestion="pkill -f 'APP NAME'"
-
-    # SSH / remote
-    elif [[ "$req_lower" =~ (ssh|connect|remote).*(server|host) ]]; then
-        suggestion="ssh user@hostname"
-    elif [[ "$req_lower" =~ (copy|upload|send).*(remote|server|ssh) ]]; then
-        suggestion="scp FILE user@hostname:/path/"
-    elif [[ "$req_lower" =~ (download|get).*(remote|server|ssh) ]]; then
-        suggestion="scp user@hostname:/path/FILE ."
-    elif [[ "$req_lower" =~ (generate|create|make).*(ssh).*(key) ]]; then
-        suggestion="ssh-keygen -t ed25519"
-
-    # Text / editing
-    elif [[ "$req_lower" =~ (replace|substitute|swap).*(text|word|string) ]]; then
-        suggestion="sed -i '' 's/OLD/NEW/g' FILENAME"
-    elif [[ "$req_lower" =~ (sort|order).*(line|text|file) ]]; then
-        suggestion="sort FILENAME"
-    elif [[ "$req_lower" =~ (unique|dedupe|duplicate).*(line) ]]; then
-        suggestion="sort FILENAME | uniq"
-    elif [[ "$req_lower" =~ (word|character).*(count|number) ]]; then
-        suggestion="wc FILENAME"
-    elif [[ "$req_lower" =~ (diff|compare|different).*(file) ]]; then
-        suggestion="diff FILE1 FILE2"
-    elif [[ "$req_lower" =~ (combine|merge|join).*(file) ]]; then
-        suggestion="cat FILE1 FILE2 > combined.txt"
-
-    # Clipboard
-    elif [[ "$req_lower" =~ (copy|clipboard).*(output|result|command) ]]; then
-        suggestion="COMMAND | pbcopy"
-    elif [[ "$req_lower" =~ (paste|clipboard).*(file) ]]; then
-        suggestion="pbpaste > FILENAME"
-
-    # Archives / downloads
-    elif [[ "$req_lower" =~ (extract|unpack|open).*(tar|gz|tarball) ]]; then
-        suggestion="tar -xzf ARCHIVE.tar.gz"
-    elif [[ "$req_lower" =~ (create|make|compress).*(tar|tarball) ]]; then
-        suggestion="tar -czf archive.tar.gz FOLDER/"
-
-    # Cron / scheduling
-    elif [[ "$req_lower" =~ (schedule|cron|automate|automatic) ]]; then
-        suggestion="crontab -e  # opens cron editor"
-    elif [[ "$req_lower" =~ (list|show).*(cron|scheduled) ]]; then
-        suggestion="crontab -l"
-
-    # Networking extras
-    elif [[ "$req_lower" =~ (speed|test|bandwidth).*(network|internet) ]]; then
-        suggestion="curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 -"
-    elif [[ "$req_lower" =~ (trace|route|traceroute) ]]; then
-        suggestion="traceroute google.com"
-    elif [[ "$req_lower" =~ (dns|lookup|resolve).*(domain|hostname) ]]; then
-        suggestion="nslookup DOMAIN"
-    elif [[ "$req_lower" =~ (hostname|computer.name|machine.name) ]]; then
-        suggestion="hostname"
-
-    # macOS system
-    elif [[ "$req_lower" =~ (restart|reboot).*(mac|computer) ]]; then
-        suggestion="sudo shutdown -r now"
-    elif [[ "$req_lower" =~ (shutdown|turn off|power off) ]]; then
-        suggestion="sudo shutdown -h now"
-    elif [[ "$req_lower" =~ (sleep|suspend).*(mac|computer) ]]; then
-        suggestion="pmset sleepnow"
-    elif [[ "$req_lower" =~ (uptime|running.since|how long) ]]; then
-        suggestion="uptime"
-    elif [[ "$req_lower" =~ (screen|display).*(brightness) ]]; then
-        suggestion="brightness 0.5  # 0.0 to 1.0 (requires brew install brightness)"
-    elif [[ "$req_lower" =~ (volume|sound|audio).*(set|change) ]]; then
-        suggestion="osascript -e 'set volume output volume 50'  # 0-100"
-    elif [[ "$req_lower" =~ (mute|silence) ]]; then
-        suggestion="osascript -e 'set volume output muted true'"
-    elif [[ "$req_lower" =~ (notification|notify|alert).*(send|show) ]]; then
-        suggestion="osascript -e 'display notification \"MESSAGE\" with title \"TITLE\"'"
-    elif [[ "$req_lower" =~ (screenshot|screen.capture|capture.screen) ]]; then
-        suggestion="screencapture ~/Desktop/screenshot.png"
-    elif [[ "$req_lower" =~ (defaults|preference|plist).*(write|set) ]]; then
-        suggestion="defaults write com.apple.DOMAIN KEY VALUE"
-    elif [[ "$req_lower" =~ (spotlight|index|reindex) ]]; then
-        suggestion="sudo mdutil -E /"
-
-    # Misc useful
-    elif [[ "$req_lower" =~ (date|time|today|now) ]]; then
-        suggestion="date"
-    elif [[ "$req_lower" =~ (calendar|cal) ]]; then
-        suggestion="cal"
-    elif [[ "$req_lower" =~ (calculator|math|calculate) ]]; then
-        suggestion="python3 -c 'print(YOUR_EXPRESSION)'"
-    elif [[ "$req_lower" =~ (random|generate).*(password|string) ]]; then
-        suggestion="openssl rand -base64 16"
-    elif [[ "$req_lower" =~ (encode|base64).*(encode) ]]; then
-        suggestion="echo 'TEXT' | base64"
-    elif [[ "$req_lower" =~ (decode|base64).*(decode) ]]; then
-        suggestion="echo 'BASE64STRING' | base64 --decode"
-    elif [[ "$req_lower" =~ (hash|checksum|md5|sha) ]]; then
-        suggestion="md5 FILENAME  # or: shasum -a 256 FILENAME"
-    elif [[ "$req_lower" =~ (repeat|loop|every).*(command) ]]; then
-        suggestion="while true; do COMMAND; sleep 5; done"
-    elif [[ "$req_lower" =~ (yes|confirm|answer).*(prompt|automatically) ]]; then
-        suggestion="yes | COMMAND"
-    elif [[ "$req_lower" =~ (time|how long).*(command|take) ]]; then
-        suggestion="time COMMAND"
-    elif [[ "$req_lower" =~ (manual|man|help|docs).*(command) ]]; then
-        suggestion="man COMMAND"
-    elif [[ "$req_lower" =~ (alias|shortcut).*(command) ]]; then
-        suggestion="alias myshortcut='COMMAND'"
-    elif [[ "$req_lower" =~ (clear|clean).*(screen|terminal) ]]; then
-        suggestion="clear"
-    elif [[ "$req_lower" =~ (who|logged|user).*(in|am) ]]; then
-        suggestion="whoami"
-    fi
-
+    case "$level" in
+        beginner)
+            note=$(echo "$raw" | grep '^EXPLANATION:' | sed 's/^EXPLANATION: *//')
+            [[ -n "$note" ]] && _bt_note "$note"
+            _bt_cmd "$cmd"
+            ;;
+        intermediate)
+            _bt_cmd "$cmd"
+            note=$(echo "$raw" | grep '^NOTE:' | sed 's/^NOTE: *//')
+            [[ -n "$note" ]] && _bt_note "$note"
+            ;;
+        expert)
+            _bt_cmd "$cmd"
+            ;;
+    esac
     echo ""
-    if [[ -n "$suggestion" ]]; then
-        echo "${_BT_BOLD}${_BT_WHITE}Best match (local):${_BT_RESET}"
-        echo ""
-        _bt_cmd "$suggestion"
-        echo ""
-        _bt_tip "Set ANTHROPIC_API_KEY in ~/.zshrc for smarter AI suggestions"
-    else
-        _bt_warn "Not sure how to do that with local patterns"
-        echo ""
-        echo "  Try describing it differently, or set your API key for smarter suggestions."
-        echo ""
-        echo "  ${_BT_BOLD}Some things I can help with offline:${_BT_RESET}"
-        echo "  • show files, find files, delete files"
-        echo "  • check disk space, copy, move, rename"
-        echo "  • git commands, zip/unzip, search text"
-        echo "  • check network, list processes"
-        echo "  • python: run scripts, install packages, virtual envs"
-    fi
-    echo ""
+    printf "  Run it? [y/N] "
+    read -r _bt_run_ans
+    [[ "$_bt_run_ans" == [yY] ]] && eval "$cmd"
 }
 
-# =============================================================================
-# PUBLIC COMMANDS
-# =============================================================================
-
-function bashtutor_toggle() {
-    if [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" ]]; then
-        export BASHTUTOR_AUTO_EXPLAIN="0"
-        echo ""
-        _bt_info "Auto-explain is now OFF"
-        echo "  (Press Ctrl+B any time to explain a command manually)"
-        echo ""
-    else
-        export BASHTUTOR_AUTO_EXPLAIN="1"
-        echo ""
-        _bt_success "Auto-explain is now ON — I'll explain every command you run"
-        echo ""
-    fi
+# ── display local response ────────────────────────────────────────────────────
+function _bt_display_local() {
+    local level="${BASHTUTOR_LEVEL:-beginner}"
+    echo ""
+    case "$level" in
+        beginner)
+            [[ -n "$_BT_NOTE_B" ]] && _bt_note "$_BT_NOTE_B"
+            _bt_cmd "$_BT_CMD"
+            ;;
+        intermediate)
+            _bt_cmd "$_BT_CMD"
+            [[ -n "$_BT_NOTE_I" ]] && _bt_note "$_BT_NOTE_I"
+            ;;
+        expert)
+            _bt_cmd "$_BT_CMD"
+            ;;
+    esac
+    echo ""
+    printf "  Run it? [y/N] "
+    read -r _bt_run_ans
+    [[ "$_bt_run_ans" == [yY] ]] && eval "$_BT_CMD"
 }
 
-function bashtutor_history() {
-    echo ""
-    echo "${_BT_BOLD}${_BT_CYAN}📜 Recent commands:${_BT_RESET}"
-    echo ""
+# ── qq ────────────────────────────────────────────────────────────────────────
+function qq() {
+    local query="$*"
 
-    if [[ ! -f "$BASHTUTOR_HISTORY_FILE" ]]; then
-        _bt_warn "No history yet — run some commands first"
-        echo ""
-        return 0
+    if [[ "$1" == "level" && -n "$2" ]]; then
+        case "$2" in
+            beginner|intermediate|expert)
+                BASHTUTOR_LEVEL="$2"
+                echo "BASHTUTOR_LEVEL=$2" > "$BASHTUTOR_CONFIG"
+                printf "${_GR}  Level: %s${_R}\n" "$2"
+                return 0 ;;
+            *)
+                _bt_err "Level must be: beginner, intermediate, or expert"
+                return 1 ;;
+        esac
     fi
 
-    local i=1
-    tail -10 "$BASHTUTOR_HISTORY_FILE" 2>/dev/null | while IFS= read -r line; do
-        local cmd=$(echo "$line" | sed -n 's/.*"command":"\([^"]*\)".*/\1/p' | sed 's/\\"/"/g')
-        local exit_code=$(echo "$line" | sed -n 's/.*"exit_code":\([0-9]*\).*/\1/p')
-        local ts=$(echo "$line" | sed -n 's/.*"timestamp":"\([^"]*\)".*/\1/p')
+    [[ "$query" == "help" || -z "$query" ]] && { _bt_help; return 0; }
 
-        local status_icon="✅"
-        [[ "$exit_code" != "0" ]] && status_icon="❌"
-
-        printf "  ${_BT_YELLOW}%2d.${_BT_RESET} %s ${_BT_BLUE}%s${_BT_RESET}  ${_BT_WHITE}%s${_BT_RESET}\n" \
-            "$i" "$status_icon" "$cmd" "$ts"
-        ((i++))
-    done
-    echo ""
-}
-
-function bashtutor_status() {
-    echo ""
-    echo "${_BT_BOLD}${_BT_CYAN}🎓 BashTutor ${BASHTUTOR_VERSION} — Claude Edition 🤖${_BT_RESET}"
-    echo ""
-
-    if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        _bt_success "Claude API: connected (${BASHTUTOR_CLAUDE_MODEL})"
-    else
-        _bt_warn "Claude API: no key set  (local patterns only)"
-        echo "    Set ANTHROPIC_API_KEY in ~/.zshrc to enable AI"
-    fi
-
-    local auto_status="off"
-    [[ "${BASHTUTOR_AUTO_EXPLAIN}" == "1" ]] && auto_status="${_BT_GREEN}on${_BT_RESET}"
-
-    echo "  Auto-explain:  $auto_status"
-    echo "  Architecture:  $BASHTUTOR_ARCH"
-    echo "  Config:        $BASHTUTOR_CONFIG_FILE"
-    echo "  History:       $BASHTUTOR_HISTORY_FILE"
-    echo "  Cache:         $BASHTUTOR_CACHE_DIR"
-    echo ""
-    echo "  ${_BT_BOLD}Commands:${_BT_RESET}  bashme / bt / Ctrl+B / btx / bth / bashtutor_status"
-    echo ""
-}
-
-function bashtutor_clear_cache() {
-    _bashtutor_cache_clear
-}
-
-# =============================================================================
-# CLEANUP
-# =============================================================================
-
-function _bashtutor_cleanup() {
-    _bashtutor_cache_clean_expired 2>/dev/null || true
-}
-
-function _bashtutor_cache_clean_expired() {
-    [[ ! -d "$BASHTUTOR_CACHE_DIR" ]] && return 0
-    local ttl_secs=$(( ${BASHTUTOR_CACHE_TTL:-24} * 3600 ))
-    local now=$(date +%s 2>/dev/null || echo 0)
-    for f in "$BASHTUTOR_CACHE_DIR"/*.cache; do
-        [[ ! -f "$f" ]] && continue
-        local mtime=$(stat -f%m "$f" 2>/dev/null || stat -c%Y "$f" 2>/dev/null || echo 0)
-        [[ $(( now - mtime )) -gt $ttl_secs ]] && rm -f "$f" 2>/dev/null
-    done
-}
-
-trap '_bashtutor_cleanup' EXIT 2>/dev/null || true
-
-# =============================================================================
-# GHOST AUTOCOMPLETE (zsh-autosuggestions integration + pure ZLE fallback)
-# =============================================================================
-#
-# How it works:
-#   - If zsh-autosuggestions is installed: BashTutor feeds its learned
-#     sequences into the suggestion source, so ghost text reflects YOUR habits
-#   - If not installed: BashTutor implements its own grey ghost text via ZLE
-#   - Either way: grey suggestion appears as you type, press → or Tab to accept
-#   - Suggestions come from: your sequence history, then zsh history
-
-# Override zsh-autosuggestions strategy to include BashTutor sequences
-function _bashtutor_suggest_from_sequences() {
-    local prefix="$1"
-    [[ -z "$prefix" ]] && return 1
-    [[ ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return 1
-
-    local base_prefix
-    base_prefix=$(echo "$prefix" | awk '{print $1}' 2>/dev/null)
-    [[ -z "$base_prefix" ]] && return 1
-
-    # Find the most common next command after prefix's base command
-    local next
-    next=$(grep "^${base_prefix}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
-        awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | awk 'NR==1{print $2}')
-
-    [[ -n "$next" ]] && { typeset -g REPLY="$next"; return 0; }
-    return 1
-}
-
-# Pure ZLE ghost text implementation (no zsh-autosuggestions needed)
-# Shows grey suggestion after cursor as you type
-function _bashtutor_zle_ghost_setup() {
-    # Only set up if zsh-autosuggestions is NOT already handling this
-    if (( ${+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE} )); then
-        # zsh-autosuggestions is loaded — hook into it instead
-        _bashtutor_hook_autosuggestions
-        return 0
-    fi
-
-    # Pure ZLE implementation
-    autoload -Uz add-zsh-hook 2>/dev/null || return 0
-
-    # Ghost text state
-    typeset -g _BT_GHOST_TEXT=""
-    typeset -g _BT_GHOST_ACTIVE=0
-
-    # Highlight style for ghost text — grey
-    typeset -g ZLE_RPROMPT_INDENT=0
-
-    function _bashtutor_ghost_update() {
-        local buf="$BUFFER"
-        _BT_GHOST_TEXT=""
-        _BT_GHOST_ACTIVE=0
-
-        [[ -z "$buf" ]] && { zle -R; return; }
-        [[ ${#buf} -lt 2 ]] && { zle -R; return; }
-
-        local suggestion=""
-
-        # Source 1: BashTutor sequence learning
-        if [[ -f "$BASHTUTOR_SEQUENCES_FILE" ]]; then
-            local base_cmd
-            base_cmd=$(echo "$buf" | awk '{print $1}' 2>/dev/null)
-            if [[ -n "$base_cmd" ]]; then
-                local seq_match
-                seq_match=$(grep "^${base_cmd}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
-                    awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | \
-                    awk 'NR==1 && $1>=2 {print $2}')
-                [[ -n "$seq_match" ]] && suggestion="$seq_match"
-            fi
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        printf "${_CY}  ...${_R}\n"
+        local ai_response
+        ai_response=$(_bt_claude_call "$query")
+        if [[ -n "$ai_response" ]]; then
+            _bt_display_ai "$ai_response"
+            return $?
         fi
+        _bt_warn "Claude unavailable — using local patterns"
+    fi
 
-        # Source 2: zsh history (most recent matching entry)
-        if [[ -z "$suggestion" ]]; then
-            local hist_match
-            hist_match=$(fc -l 1 2>/dev/null | \
-                awk -v prefix="$buf" 'index($0, prefix)==1 {found=$0} END {print found}' | \
-                sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' 2>/dev/null)
-            # Only suggest if it's longer than what's typed
-            if [[ -n "$hist_match" && "$hist_match" != "$buf" && ${#hist_match} -gt ${#buf} ]]; then
-                suggestion="$hist_match"
-            fi
-        fi
-
-        # Source 3: BashTutor seen_commands (commands user has run before)
-        if [[ -z "$suggestion" && -f "$BASHTUTOR_SEEN_COMMANDS_FILE" ]]; then
-            local seen_match
-            seen_match=$(grep "^${buf}" "$BASHTUTOR_SEEN_COMMANDS_FILE" 2>/dev/null | head -1)
-            if [[ -n "$seen_match" && "$seen_match" != "$buf" ]]; then
-                suggestion="$seen_match"
-            fi
-        fi
-
-        if [[ -n "$suggestion" && "$suggestion" != "$buf" ]]; then
-            # Show ghost text — the part after what's already typed
-            if [[ "$suggestion" == "$buf"* ]]; then
-                _BT_GHOST_TEXT="${suggestion#$buf}"
-            else
-                _BT_GHOST_TEXT=" → $suggestion"
-            fi
-            _BT_GHOST_ACTIVE=1
-
-            # Display ghost text in grey after cursor using region_highlight
-            local ghost_start=${#BUFFER}
-            local ghost_end=$(( ghost_start + ${#_BT_GHOST_TEXT} ))
-
-            # Temporarily append ghost text to buffer for display only
-            BUFFER="${BUFFER}${_BT_GHOST_TEXT}"
-            CURSOR=$ghost_start
-            region_highlight=("$ghost_start $ghost_end fg=8,bold")
-        else
-            _BT_GHOST_TEXT=""
-            _BT_GHOST_ACTIVE=0
-            region_highlight=()
-        fi
-
-        zle -R
+    _bt_local_lookup "$query" || {
+        _bt_err "No pattern found for: $query"
+        printf "${_CY}  Try rephrasing — or: man <command>${_R}\n"
+        return 1
     }
+    _bt_display_local
+}
 
-    # Accept ghost suggestion with → (right arrow) or Tab
-    function _bashtutor_ghost_accept() {
-        if [[ $_BT_GHOST_ACTIVE -eq 1 && -n "$_BT_GHOST_TEXT" ]]; then
-            # Ghost text is already in BUFFER — just move cursor to end
-            CURSOR=${#BUFFER}
-            region_highlight=()
-            _BT_GHOST_TEXT=""
-            _BT_GHOST_ACTIVE=0
-            zle -R
-        else
-            # No ghost text — do normal forward-char or tab-complete
-            if [[ "$WIDGET" == "bashtutor-ghost-accept-tab" ]]; then
-                zle expand-or-complete
-            else
-                zle forward-char
-            fi
-        fi
-    }
+# ── explain last command (Ctrl+B) ─────────────────────────────────────────────
+typeset -gA BASHTUTOR_EXPLANATIONS
+BASHTUTOR_EXPLANATIONS=(
+    ls "Listed files and directories" ll "Listed files with details"
+    la "Listed all files including hidden" cd "Changed directory"
+    pwd "Showed current directory" mkdir "Created a directory"
+    rm "Deleted files or directories" cp "Copied files"
+    mv "Moved or renamed files" touch "Created or updated a file"
+    cat "Printed file contents" less "Opened file for scrolling"
+    head "Showed start of file" tail "Showed end of file"
+    grep "Searched for text patterns" find "Found files by criteria"
+    chmod "Changed file permissions" chown "Changed file ownership"
+    sudo "Ran with admin privileges" ssh "Connected to remote server"
+    curl "Fetched URL data" wget "Downloaded a file"
+    tar "Archived or extracted files" git "Ran git command"
+    npm "Ran npm command" pip3 "Installed Python package"
+    docker "Ran Docker command" brew "Ran Homebrew"
+    ps "Listed running processes" kill "Stopped a process"
+    df "Showed disk space" du "Showed directory sizes"
+    ping "Tested network connectivity" export "Set environment variable"
+    source "Reloaded shell config" history "Showed command history"
+    which "Found command location" date "Showed date and time"
+    whoami "Showed username" uname "Showed system info"
+    sed "Edited text with patterns" sort "Sorted lines"
+    rsync "Synced files between locations" nano "Opened file in editor"
+)
 
-    # On any keypress — strip ghost text from buffer first, then update
-    function _bashtutor_ghost_self_insert() {
-        if [[ $_BT_GHOST_ACTIVE -eq 1 && -n "$_BT_GHOST_TEXT" ]]; then
-            # Remove ghost text before inserting new character
-            BUFFER="${BUFFER%${_BT_GHOST_TEXT}}"
-            region_highlight=()
-            _BT_GHOST_TEXT=""
-            _BT_GHOST_ACTIVE=0
-        fi
-        zle self-insert
-        _bashtutor_ghost_update
-    }
-
-    # Escape/delete clears ghost
-    function _bashtutor_ghost_clear() {
-        if [[ $_BT_GHOST_ACTIVE -eq 1 ]]; then
-            BUFFER="${BUFFER%${_BT_GHOST_TEXT}}"
-            region_highlight=()
-            _BT_GHOST_TEXT=""
-            _BT_GHOST_ACTIVE=0
-            zle -R
-        fi
-        zle "$@" 2>/dev/null || true
-    }
-
-    # Register ZLE widgets
-    zle -N bashtutor-ghost-update _bashtutor_ghost_update
-    zle -N bashtutor-ghost-accept _bashtutor_ghost_accept
-    zle -N bashtutor-ghost-accept-tab _bashtutor_ghost_accept
-    zle -N bashtutor-ghost-self-insert _bashtutor_ghost_self_insert
-
-    # Key bindings
-    bindkey '^[[C' bashtutor-ghost-accept        # → right arrow accepts
-    bindkey '^[OC' bashtutor-ghost-accept        # → right arrow (alternate)
-    bindkey '^I'   bashtutor-ghost-accept-tab    # Tab accepts
-    bindkey -M main '^[^[[C' forward-word        # Alt+→ still moves word
-
-    # Hook into ZLE to update ghost on every keypress
-    autoload -Uz add-zsh-hook
-    add-zsh-hook zle-line-init _bashtutor_ghost_update 2>/dev/null || true
-
-    # Override self-insert for printable chars
-    # (We do this carefully to avoid breaking things)
-    if zle -l self-insert &>/dev/null; then
-        bindkey -M main ' '  bashtutor-ghost-self-insert
-        # For letter keys — use zle-keymap-select hook approach instead
-        # to avoid having to bind every character individually
-        function zle-line-pre-redraw() {
-            [[ -n "$KEYS" && "$KEYS" != $'\t' && "$KEYS" != $'\r' ]] && \
-                _bashtutor_ghost_update 2>/dev/null || true
-        }
-        zle -N zle-line-pre-redraw
+function _bt_explain_last() {
+    local cmd="${_BT_LAST_CMD:-$(fc -ln -1 2>/dev/null | sed 's/^ *//')}"
+    if [[ -z "$cmd" ]]; then
+        printf "\n${_YE}  No previous command${_R}\n"
+        zle redisplay 2>/dev/null
+        return
     fi
-}
+    local base="${cmd%% *}"
+    local expl="${BASHTUTOR_EXPLANATIONS[$base]}"
 
-# Hook into zsh-autosuggestions if it's already loaded
-function _bashtutor_hook_autosuggestions() {
-    # Add BashTutor as an additional suggestion strategy
-    # zsh-autosuggestions checks ZSH_AUTOSUGGEST_STRATEGY array in order
-    if (( ${+ZSH_AUTOSUGGEST_STRATEGY} )); then
-        # Prepend bashtutor strategy
-        ZSH_AUTOSUGGEST_STRATEGY=(bashtutor_sequences "${ZSH_AUTOSUGGEST_STRATEGY[@]}")
-    else
-        ZSH_AUTOSUGGEST_STRATEGY=(bashtutor_sequences history completion)
+    if [[ -z "$expl" && -n "${ANTHROPIC_API_KEY:-}" && "${BASHTUTOR_LEVEL}" != "expert" ]]; then
+        expl=$(echo "Explain in one sentence what this shell command did: $cmd" | \
+            _bt_claude_call "Explain in one sentence what this shell command did: $cmd" 2>/dev/null | \
+            grep -v '^COMMAND:' | head -1)
     fi
+    [[ -z "$expl" ]] && expl="Ran: $base"
 
-    # Register our strategy function
-    # zsh-autosuggestions calls _zsh_autosuggest_strategy_<name> with buffer as $1
-    function _zsh_autosuggest_strategy_bashtutor_sequences() {
-        local buf="$1"
-        [[ -z "$buf" || ! -f "$BASHTUTOR_SEQUENCES_FILE" ]] && return
+    printf "\n${_CY}  ❯ %s${_R}\n${_BL}  %s${_R}\n\n" "$cmd" "$expl"
+    zle redisplay 2>/dev/null
+}
+zle -N _bt_explain_last
+bindkey '^B' _bt_explain_last
 
-        local base_cmd
-        base_cmd=$(echo "$buf" | awk '{print $1}')
-        [[ -z "$base_cmd" ]] && return
-
-        local next
-        next=$(grep "^${base_cmd}|||" "$BASHTUTOR_SEQUENCES_FILE" 2>/dev/null | \
-            awk -F'|||' '{print $2}' | sort | uniq -c | sort -rn | \
-            awk 'NR==1 && $1>=2 {print $2}')
-
-        [[ -n "$next" ]] && typeset -g suggestion="$next"
-    }
-
-    # Make it a soft grey (matches standard zsh-autosuggestions style)
-    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="${ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE:-fg=8}"
+# ── help screen ───────────────────────────────────────────────────────────────
+function _bt_help() {
+    local ai_status
+    [[ -n "${ANTHROPIC_API_KEY:-}" ]] && ai_status="${_GR}claude${_R}" || ai_status="${_YE}local fallback${_R}"
+    printf "\n${_CY}${_B}❯ BashTutor${_R}  Level: ${_YE}%s${_R}  AI: %s\n\n" "$BASHTUTOR_LEVEL" "$ai_status"
+    printf "${_B}Usage:${_R}\n"
+    printf "  qq <question>           ask in plain English\n"
+    printf "  bt <question>           same, shorter alias\n"
+    printf "  bashme <question>       same\n"
+    printf "  qq level beginner       set response level\n"
+    printf "  qq level intermediate\n"
+    printf "  qq level expert\n"
+    printf "\n${_B}Keybindings:${_R}\n"
+    printf "  Ctrl+B                  explain last command\n"
+    printf "  Ctrl+F                  complete from history\n"
+    printf "\n${_B}Examples:${_R}\n"
+    printf "  qq list files by size\n"
+    printf "  qq find large files\n"
+    printf "  qq git save and push\n"
+    printf "  qq run a script in the background\n"
+    printf "\n${_B}Levels:${_R}\n"
+    printf "  ${_YE}beginner${_R}      plain English + command\n"
+    printf "  ${_YE}intermediate${_R}  command + brief note\n"
+    printf "  ${_YE}expert${_R}        command only\n\n"
 }
 
-# =============================================================================
-# REGISTER HOOKS, KEYBINDINGS & ALIASES
-# =============================================================================
+# ── hooks & aliases ───────────────────────────────────────────────────────────
+autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook preexec _bt_preexec
 
-autoload -Uz add-zsh-hook 2>/dev/null && {
-    add-zsh-hook preexec bashtutor_preexec
-    add-zsh-hook precmd bashtutor_precmd
-    add-zsh-hook zshaddhistory bashtutor_zshaddhistory
-}
-
-# Safety check hook for destructive commands (fires before command runs)
-function bashtutor_zshaddhistory() {
-    local cmd="$1"
-    _bashtutor_safety_check "$cmd"
-    return 0  # always return 0 to allow the command to run
-}
-
-# Ctrl+B → explain last command
-zle -N bashtutor_explain_last 2>/dev/null && \
-    bindkey '^B' bashtutor_explain_last 2>/dev/null || true
-
-# Aliases
-alias bt='bashme'
-alias qq='bashme'
-alias btx='bashtutor_toggle'
-alias bth='bashtutor_history'
-alias bts='bashtutor_status'
-
-# =============================================================================
-# BOOT
-# =============================================================================
-
-_bashtutor_setup
-
-# Welcome message (once per session)
-if [[ -z "${BASHTUTOR_WELCOME_SHOWN}" ]]; then
-    echo ""
-    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╗  █████╗ ███████╗██╗  ██╗${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}   ██╔══██╗██╔══██╗██╔════╝██║  ██║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╔╝███████║███████╗███████║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}   ██╔══██╗██╔══██║╚════██║██╔══██║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}   ██████╔╝██║  ██║███████║██║  ██║${_BT_RESET}"
-    echo "${_BT_ORANGE}${_BT_BOLD}   ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}   ████████╗██╗   ██╗████████╗ ██████╗ ██████╗${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ██╔══╝██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ██║   ██║   ██║   ██║   ██║██████╔╝${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ██║   ██║   ██║   ██║   ██║██╔══██╗${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ██║   ╚██████╔╝   ██║   ╚██████╔╝██║  ██║${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}      ╚═╝    ╚═════╝    ╚═╝    ╚═════╝ ╚═╝  ╚═╝${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
-    echo "${_BT_WHITE}${_BT_BOLD}      B a \$ h   T u t o r   ~   b a s h   f o r   h u m a n s${_BT_RESET}"
-    echo "${_BT_GREEN}${_BT_BOLD}   ─────────────────────────────────────────────${_BT_RESET}"
-    echo ""
-    echo "      ${_BT_WHITE}v${BASHTUTOR_VERSION}${_BT_RESET}  ${_BT_ORANGE}🤖 Claude Edition${_BT_RESET}"
-    echo ""
-
-    if [[ "$BASHTUTOR_AI_AVAILABLE" == "1" ]]; then
-        echo "      ${_BT_GREEN}✅ Claude API ready${_BT_RESET}   ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
-    else
-        echo "      ${_BT_YELLOW}⚠️  No API key — running in local mode${_BT_RESET}"
-        echo "      ${_BT_GREEN}👻 Ghost autocomplete on${_BT_RESET}"
-    fi
-
-    echo ""
-    echo "      ${_BT_ORANGE}qq${_BT_RESET} plain english   ${_BT_GREEN}Ctrl+B${_BT_RESET} explain last   ${_BT_WHITE}cmd + what?${_BT_RESET} explain anything"
-    echo ""
-    # Boot sound — plays in background so it doesn't slow terminal open
-    afplay /System/Library/Sounds/Glass.aiff &>/dev/null &
-
-    export BASHTUTOR_WELCOME_SHOWN="1"
-fi
+alias bt='qq'
+alias bashme='qq'
