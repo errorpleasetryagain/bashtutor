@@ -93,6 +93,13 @@ function _bt_self_insert_ghost() {
 }
 zle -N self-insert _bt_self_insert_ghost
 
+function _bt_ghost_clear() {
+    POSTDISPLAY=""
+    _BT_GHOST=""
+}
+zle -N _bt_ghost_clear
+add-zle-hook-widget line-finish _bt_ghost_clear
+
 # ── ascii cat reactions ───────────────────────────────────────────────────────
 function _bt_cat_happy() {
     [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
@@ -109,6 +116,8 @@ function _bt_cat_warn() {
 
 # ── destructive command warning ───────────────────────────────────────────────
 function _bt_preexec() {
+    POSTDISPLAY=""
+    _BT_GHOST=""
     export _BT_LAST_CMD="$1"
     local cmd="$1"
     # Normalise for matching: strip leading spaces, collapse runs of spaces
