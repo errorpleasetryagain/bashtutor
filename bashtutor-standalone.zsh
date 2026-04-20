@@ -148,18 +148,9 @@ zle -N _bt_ghost_clear
 add-zle-hook-widget line-finish _bt_ghost_clear
 
 # ── ascii cat reactions ───────────────────────────────────────────────────────
-function _bt_cat_happy() {
-    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
-    printf "${_OR} /\\_/\\ \n${_OR}( o.o )\n${_OR} > ^ < ${_R}\n"
-}
-function _bt_cat_thinking() {
-    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
-    printf "${_OR} /\\_/\\ \n${_OR}( -.- )\n${_OR} > ? < ${_R}\n"
-}
-function _bt_cat_warn() {
-    [[ $(tput cols 2>/dev/null) -gt 60 ]] || return
-    printf "${_OR} /\\_/\\ \n${_OR}( o_o )\n${_OR} > ! < ${_R}\n"
-}
+function _bt_cat_happy()    { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =^.^= ${_R}"; }
+function _bt_cat_thinking() { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =-.^= ${_R}"; }
+function _bt_cat_warn()     { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =o_o= ${_R}"; }
 
 # ── destructive command warning ───────────────────────────────────────────────
 function _bt_preexec() {
@@ -172,8 +163,7 @@ function _bt_preexec() {
     cmd_n="${cmd_n//  / }"
     case "$cmd_n" in
         rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
-            _bt_cat_warn
-            printf "${_RE}${_B}  ⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
+            printf "${_RE} =o_o= ${_B}⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
             read -r _bt_ans
             [[ "$_bt_ans" != [yY] ]] && { BUFFER=""; zle redisplay 2>/dev/null; return 1; }
             ;;
@@ -781,20 +771,15 @@ function _bt_lookup() {
 # ── display result ────────────────────────────────────────────────────────────
 function _bt_display() {
     local level="${BASHTUTOR_LEVEL:-beginner}"
-    _bt_cat_happy
-    echo ""
+    printf "${_OR} =^.^= ${_B}%s${_R}\n" "$_BT_CMD"
     case "$level" in
         beginner)
             [[ -n "$_BT_NOTE_B" ]] && _bt_note "$_BT_NOTE_B"
-            _bt_cmd "$_BT_CMD"
             ;;
         intermediate)
-            _bt_cmd "$_BT_CMD"
             [[ -n "$_BT_NOTE_I" ]] && _bt_note "$_BT_NOTE_I"
             ;;
-        expert)
-            _bt_cmd "$_BT_CMD"
-            ;;
+        expert) ;;
     esac
     echo ""
     printf "  Run it? [y/N] "
@@ -822,8 +807,7 @@ function qq() {
     [[ "$query" == "help" || -z "$query" ]] && { _bt_help; return 0; }
 
     _bt_lookup "$query" || {
-        _bt_cat_thinking
-        printf "\n${_CY}  Hmm, not sure about '${_OR}%s${_CY}'.${_R}\n" "$query"
+        printf "${_OR} =-.^= ${_CY} not sure about '%s'${_R}\n" "$query"
         printf "${_CY}  Try rephrasing — for example:${_R}\n"
         printf "${_GH}    • use a verb + object  (e.g. 'compress folder', 'delete file')${_R}\n"
         printf "${_GH}    • name the tool        (e.g. 'git undo last commit')${_R}\n"
@@ -920,3 +904,23 @@ autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook preexec _bt_preexec
 
 alias bt='qq'
 alias bashme='qq'
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias ll='ls -la'
+alias la='ls -la'
+alias lt='ls -lt'
+alias lth='ls -lt | head -20'
+alias ports='lsof -i -P | grep LISTEN'
+alias myip='ipconfig getifaddr en0'
+alias pubip='curl -s ifconfig.me'
+alias flushdns='sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder'
+alias hosts='sudo nano /etc/hosts'
+alias zshrc='nano ~/.zshrc'
+alias reload='source ~/.zshrc'
+alias hist='history | tail -30'
+alias path='echo $PATH | tr ":" "\n"'
+alias week='date +%V'
+alias now='date +"%T"'
+alias today='date +"%Y-%m-%d"'
