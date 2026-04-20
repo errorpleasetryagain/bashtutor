@@ -40,7 +40,7 @@ _bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
 # ── boot line ─────────────────────────────────────────────────────────────────
 if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-    printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}[claude·%s]${_R}  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+    printf "${_OR}${_B}❯ BashTutor${_R} \e[32m[claude·%s]\e[0m  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
 else
     printf "${_OR}${_B}❯ BashTutor${_R} ${_RE}[local·%s]${_R}  set ANTHROPIC_API_KEY for AI\n" "$BASHTUTOR_LEVEL"
 fi
@@ -184,10 +184,10 @@ function _bt_local_lookup() {
     local q="${1:l}"
     _BT_CMD="" _BT_NOTE_B="" _BT_NOTE_I=""
     case "$q" in
-        *list*file*|*show*file*|*what*here*) _BT_CMD="ls -la"; _BT_NOTE_B="Lists all files including hidden"; _BT_NOTE_I="# -l=details -a=hidden" ;;
-        *creat*folder*|*mkdir*) _BT_CMD="mkdir -p folder"; _BT_NOTE_B="Creates a folder"; _BT_NOTE_I="# -p=ok if exists" ;;
-        *delet*folder*|*remov*folder*) _BT_CMD="rm -rf folder"; _BT_NOTE_B="Deletes folder and contents — no undo!"; _BT_NOTE_I="# CAREFUL" ;;
-        *delet*file*|*remov*file*) _BT_CMD="rm filename"; _BT_NOTE_B="Deletes a file permanently"; _BT_NOTE_I="# no recycle bin" ;;
+        *(list|show|display)*file*|*what*here*) _BT_CMD="ls -la"; _BT_NOTE_B="Lists all files including hidden"; _BT_NOTE_I="# -l=details -a=hidden" ;;
+        *(creat|make)*folder*|*mkdir*) _BT_CMD="mkdir -p folder"; _BT_NOTE_B="Creates a folder"; _BT_NOTE_I="# -p=ok if exists" ;;
+        *(delet|remov)*folder*) _BT_CMD="rm -rf folder"; _BT_NOTE_B="Deletes folder and contents — no undo!"; _BT_NOTE_I="# CAREFUL" ;;
+        *(delet|remov)*file*) _BT_CMD="rm filename"; _BT_NOTE_B="Deletes a file permanently"; _BT_NOTE_I="# no recycle bin" ;;
         *copy*file*) _BT_CMD="cp source dest"; _BT_NOTE_B="Copies a file"; _BT_NOTE_I="# -r for folders" ;;
         *move*|*renam*) _BT_CMD="mv old new"; _BT_NOTE_B="Moves or renames a file"; _BT_NOTE_I="# same command" ;;
         *search*text*|*find*text*|*grep*) _BT_CMD="grep -r 'pattern' ."; _BT_NOTE_B="Searches for text in all files"; _BT_NOTE_I="# -i=case-insensitive -n=line numbers" ;;
@@ -204,7 +204,7 @@ function _bt_local_lookup() {
         *git*branch*) _BT_CMD="git checkout -b branch"; _BT_NOTE_B="Creates and switches to new branch"; _BT_NOTE_I="# git branch to list" ;;
         *port*|*listen*) _BT_CMD="lsof -i -P | grep LISTEN"; _BT_NOTE_B="Shows open ports"; _BT_NOTE_I="# -P=port numbers" ;;
         *process*|*running*) _BT_CMD="ps aux"; _BT_NOTE_B="Lists all running processes"; _BT_NOTE_I="# | grep name to filter" ;;
-        *kill*process*) _BT_CMD="pkill -f name"; _BT_NOTE_B="Stops a process by name"; _BT_NOTE_I="# kill PID for by ID" ;;
+        *(kill|stop)*process*) _BT_CMD="pkill -f name"; _BT_NOTE_B="Stops a process by name"; _BT_NOTE_I="# kill PID for by ID" ;;
         *download*|*curl*) _BT_CMD="curl -O https://url/file"; _BT_NOTE_B="Downloads a file"; _BT_NOTE_I="# -L=follow redirects" ;;
         *ssh*|*remote*server*) _BT_CMD="ssh user@host"; _BT_NOTE_B="Connects to a remote server"; _BT_NOTE_I="# -i=key file" ;;
         *pipe*|*chain*) _BT_CMD="cmd1 | cmd2"; _BT_NOTE_B="Sends output of cmd1 into cmd2"; _BT_NOTE_I="# stdout → stdin" ;;
@@ -212,6 +212,7 @@ function _bt_local_lookup() {
         *for*loop*) _BT_CMD='for f in *; do echo "$f"; done'; _BT_NOTE_B="Loops over items"; _BT_NOTE_I="# $f = current item" ;;
         *alias*) _BT_CMD="alias ll='ls -la'"; _BT_NOTE_B="Creates a command shortcut"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
         *reload*config*|*source*zshrc*) _BT_CMD="source ~/.zshrc"; _BT_NOTE_B="Reloads your shell config"; _BT_NOTE_I="# . ~/.zshrc also works" ;;
+        *(set|export)*var*|*env*var*) _BT_CMD="export VAR=value"; _BT_NOTE_B="Sets an environment variable"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
         *) return 1 ;;
     esac
     return 0
@@ -280,7 +281,35 @@ function qq() {
         esac
     fi
 
-    [[ "$query" == "help" || -z "$query" ]] && { _bt_help; return 0; }
+    # No args: show single-line hint instead of full help
+    if [[ -z "$query" ]]; then
+        printf "${_OR} =-.^= ${_R}Type ${_OR}qq <question>${_R} or ${_OR}qq help${_R} for examples\n"
+        return 0
+    fi
+
+    [[ "$query" == "help" || "$query" == "--help" ]] && { _bt_help; return 0; }
+
+    # Single common-word handler — suggest more context
+    case "$query" in
+        show)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq show files${_R} / ${_OR}qq show ports${_R} / ${_OR}qq show disk space${_R}\n"; return 0 ;;
+        make)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq make folder${_R} / ${_OR}qq make file${_R} / ${_OR}qq make script executable${_R}\n"; return 0 ;;
+        get)    printf "${_OR} =-.^= ${_R}Try: ${_OR}qq get ip address${_R} / ${_OR}qq get disk space${_R} / ${_OR}qq get file from url${_R}\n"; return 0 ;;
+        find)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq find files${_R} / ${_OR}qq find text${_R} / ${_OR}qq find large files${_R}\n"; return 0 ;;
+        open)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq open finder${_R} / ${_OR}qq open file in editor${_R} / ${_OR}qq open url${_R}\n"; return 0 ;;
+        run)    printf "${_OR} =-.^= ${_R}Try: ${_OR}qq run script${_R} / ${_OR}qq run python file${_R} / ${_OR}qq run as admin${_R}\n"; return 0 ;;
+        check)  printf "${_OR} =-.^= ${_R}Try: ${_OR}qq check disk space${_R} / ${_OR}qq check ports${_R} / ${_OR}qq check node version${_R}\n"; return 0 ;;
+        list)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq list files${_R} / ${_OR}qq list processes${_R} / ${_OR}qq list installed packages${_R}\n"; return 0 ;;
+        delete) printf "${_OR} =-.^= ${_R}Try: ${_OR}qq delete file${_R} / ${_OR}qq delete folder${_R} / ${_OR}qq delete git branch${_R}\n"; return 0 ;;
+        copy)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq copy file${_R} / ${_OR}qq copy to clipboard${_R} / ${_OR}qq copy file to remote${_R}\n"; return 0 ;;
+    esac
+
+    # Short query handler (1-2 words, no verb matched above)
+    local word_count
+    word_count=$(echo "$query" | wc -w | tr -d ' ')
+    if [[ "$word_count" -le 2 ]]; then
+        printf "${_OR} =-.^= ${_R}Try adding more context: e.g. '${_OR}qq [action] [thing]${_R}' — or try ${_OR}qq help${_R} for examples\n"
+        return 0
+    fi
 
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         _bt_cat_thinking

@@ -36,7 +36,7 @@ _bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
 _bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
 # ── boot line ─────────────────────────────────────────────────────────────────
-printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}[%s]${_R}  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+printf "${_OR}${_B}❯ BashTutor${_R} \e[32m[%s]\e[0m  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
 
 # ── fish-style predictive ghost text ─────────────────────────────────────────
 typeset -g _BT_GHOST=""
@@ -88,6 +88,16 @@ typeset -gA _BT_SMART=(
     [su]="sudo "
     [ec]="echo "
     [qq]="qq "
+    [ma]="make folder / make file / make script executable"
+    [mo]="move file to folder"
+    [re]="remove file / rename file"
+    [se]="set environment variable"
+    [de]="delete file / delete folder"
+    [op]="open file in editor"
+    [ru]="run script / run python file"
+    [sh]="show files / show ports / show disk space"
+    [st]="stop process / start service"
+    [wa]="watch file changes"
 )
 
 function _bt_ghost_update() {
@@ -179,15 +189,15 @@ function _bt_lookup() {
 
     case "$q" in
 # FILES & DIRECTORIES
-        *list*file*|*show*file*|*what*here*|*ls\ *)
+        *list*file*|*show*file*|*display*file*|*what*here*|*ls\ *)
             _BT_CMD="ls -la"
             _BT_NOTE_B="Lists every file here, including hidden ones (starting with .)"
             _BT_NOTE_I="# -l=details -a=hidden files" ;;
-        *new*file*|*creat*file*|*touch\ *)
+        *new*file*|*(creat|make)*file*|*touch\ *)
             _BT_CMD="touch filename.txt"
             _BT_NOTE_B="Creates an empty file (updates timestamp if it exists)"
             _BT_NOTE_I="# creates or refreshes timestamp" ;;
-        *creat*folder*|*creat*dir*|*new*folder*|*mkdir\ *)
+        *(creat|make)*folder*|(creat|make)*dir*|*new*folder*|*mkdir\ *)
             _BT_CMD="mkdir -p folder/name"
             _BT_NOTE_B="Creates a folder — -p also creates any missing parent folders"
             _BT_NOTE_I="# -p = ok if parents don't exist" ;;
@@ -199,11 +209,11 @@ function _bt_lookup() {
             _BT_CMD="mv old.txt new.txt"
             _BT_NOTE_B="Moves or renames a file — same command for both"
             _BT_NOTE_I="# mv works for files and folders" ;;
-        *delet*file*|*remov*file*)
+        *(delet|remov)*file*)
             _BT_CMD="rm filename"
             _BT_NOTE_B="Deletes a file permanently — no Trash, no undo"
             _BT_NOTE_I="# permanent, no recycle bin" ;;
-        *delet*folder*|*remov*folder*|*delet*dir*|*remov*dir*)
+        *(delet|remov)*folder*|(delet|remov)*dir*)
             _BT_CMD="rm -rf foldername"
             _BT_NOTE_B="Deletes a folder and everything inside — no undo!"
             _BT_NOTE_I="# -r=recursive -f=force — CAREFUL" ;;
@@ -224,7 +234,7 @@ function _bt_lookup() {
             _BT_NOTE_B="Changes into a folder — use Tab to autocomplete paths"
             _BT_NOTE_I="# Tab autocompletes" ;;
 # TEXT VIEWING
-        *view*file*|*read*file*|*print*file*|*show*content*|*cat\ *)
+        *(view|show|display)*file*|*read*file*|*print*file*|*show*content*|*cat\ *)
             _BT_CMD="cat file.txt"
             _BT_NOTE_B="Prints the whole file to the screen"
             _BT_NOTE_I="# dumps entire file to stdout" ;;
@@ -240,7 +250,7 @@ function _bt_lookup() {
             _BT_CMD="tail -f logfile.log"
             _BT_NOTE_B="Watches a log file live — new lines appear as they're written"
             _BT_NOTE_I="# -f=follow, Ctrl+C to stop" ;;
-        *edit*file*|*open*editor*|*nano*)
+        *edit*file*|*(open|view)*editor*|*nano*)
             _BT_CMD="nano file.txt"
             _BT_NOTE_B="Opens a file in nano editor — Ctrl+O saves, Ctrl+X exits"
             _BT_NOTE_I="# ^O=save ^X=exit ^W=find" ;;
@@ -312,7 +322,7 @@ function _bt_lookup() {
             _BT_CMD="chmod 755 file"
             _BT_NOTE_B="Sets permissions: 7=owner all, 5=others read+run — think rwx"
             _BT_NOTE_I="# 4=read 2=write 1=exec; owner/group/others" ;;
-        *make*executable*|*run*script*chmod*)
+        *(make|creat)*executable*|*run*script*chmod*)
             _BT_CMD="chmod +x script.sh"
             _BT_NOTE_B="Makes a script executable so you can run it with ./script.sh"
             _BT_NOTE_I="# +x = add execute permission" ;;
@@ -804,7 +814,35 @@ function qq() {
         esac
     fi
 
-    [[ "$query" == "help" || -z "$query" ]] && { _bt_help; return 0; }
+    # No args: show single-line hint instead of full help
+    if [[ -z "$query" ]]; then
+        printf "${_OR} =-.^= ${_R}Type ${_OR}qq <question>${_R} or ${_OR}qq help${_R} for examples\n"
+        return 0
+    fi
+
+    [[ "$query" == "help" || "$query" == "--help" ]] && { _bt_help; return 0; }
+
+    # Single common-word handler — suggest more context
+    case "$query" in
+        show)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq show files${_R} / ${_OR}qq show ports${_R} / ${_OR}qq show disk space${_R}\n"; return 0 ;;
+        make)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq make folder${_R} / ${_OR}qq make file${_R} / ${_OR}qq make script executable${_R}\n"; return 0 ;;
+        get)    printf "${_OR} =-.^= ${_R}Try: ${_OR}qq get ip address${_R} / ${_OR}qq get disk space${_R} / ${_OR}qq get file from url${_R}\n"; return 0 ;;
+        find)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq find files${_R} / ${_OR}qq find text${_R} / ${_OR}qq find large files${_R}\n"; return 0 ;;
+        open)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq open finder${_R} / ${_OR}qq open file in editor${_R} / ${_OR}qq open url${_R}\n"; return 0 ;;
+        run)    printf "${_OR} =-.^= ${_R}Try: ${_OR}qq run script${_R} / ${_OR}qq run python file${_R} / ${_OR}qq run as admin${_R}\n"; return 0 ;;
+        check)  printf "${_OR} =-.^= ${_R}Try: ${_OR}qq check disk space${_R} / ${_OR}qq check ports${_R} / ${_OR}qq check node version${_R}\n"; return 0 ;;
+        list)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq list files${_R} / ${_OR}qq list processes${_R} / ${_OR}qq list installed packages${_R}\n"; return 0 ;;
+        delete) printf "${_OR} =-.^= ${_R}Try: ${_OR}qq delete file${_R} / ${_OR}qq delete folder${_R} / ${_OR}qq delete git branch${_R}\n"; return 0 ;;
+        copy)   printf "${_OR} =-.^= ${_R}Try: ${_OR}qq copy file${_R} / ${_OR}qq copy to clipboard${_R} / ${_OR}qq copy file to remote${_R}\n"; return 0 ;;
+    esac
+
+    # Short query handler (1-2 words, no verb matched above)
+    local word_count
+    word_count=$(echo "$query" | wc -w | tr -d ' ')
+    if [[ "$word_count" -le 2 ]]; then
+        printf "${_OR} =-.^= ${_R}Try adding more context: e.g. '${_OR}qq [action] [thing]${_R}' — or try ${_OR}qq help${_R} for examples\n"
+        return 0
+    fi
 
     _bt_lookup "$query" || {
         printf "${_OR} =-.^= ${_CY} not sure about '%s'${_R}\n" "$query"
