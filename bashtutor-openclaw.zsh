@@ -21,13 +21,13 @@ mkdir -p "$BASHTUTOR_DIR" 2>/dev/null
 
 # ── colours ───────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
-    _OR=$(printf '\033[38;5;202m')   # orange — commands, prompts
-    _DG=$(printf '\033[38;5;22m')    # dark green — success, level
-    _GH=$(printf '\033[38;5;240m')   # grey — ghost text
-    _CY=$(printf '\033[0;36m')       # cyan — notes, explanations
-    _RE=$(printf '\033[0;31m')       # red — warnings
-    _B=$(printf '\033[1m')           # bold
-    _R=$(printf '\033[0m')           # reset
+    _OR=$(printf '\033[38;5;214m')   # gold/bright orange
+    _DG=$(printf '\033[38;5;34m')    # bright green
+    _GH=$(printf '\033[38;5;245m')   # light grey (more visible)
+    _CY=$(printf '\033[38;5;51m')    # bright cyan
+    _RE=$(printf '\033[38;5;196m')   # bright red
+    _B=$(printf '\033[1m')
+    _R=$(printf '\033[0m')
 else
     _OR="" _DG="" _GH="" _CY="" _RE="" _B="" _R=""
 fi
@@ -53,9 +53,9 @@ function _bt_timeout() {
 
 # ── boot line ─────────────────────────────────────────────────────────────────
 if command -v openclaw &>/dev/null; then
-    printf "${_OR}${_B}❯ BashTutor${_R} \e[32m[openclaw·%s]\e[0m  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+    printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}v%s [openclaw·%s]${_R}  ${_CY}qq help${_R} to start\n" "$BASHTUTOR_VERSION" "$BASHTUTOR_LEVEL"
 else
-    printf "${_OR}${_B}❯ BashTutor${_R} ${_RE}[local·%s]${_R}  openclaw not found, using patterns\n" "$BASHTUTOR_LEVEL"
+    printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}v%s [local·%s]${_R}  ${_RE}openclaw not found, using patterns${_R}\n" "$BASHTUTOR_VERSION" "$BASHTUTOR_LEVEL"
 fi
 
 # ── fish-style predictive ghost text ─────────────────────────────────────────
@@ -64,9 +64,9 @@ typeset -g _BT_GHOST=""
 function _bt_ghost_update() {
     local prefix="$BUFFER"
     _BT_GHOST=""
-    [[ ${#prefix} -lt 1 ]] && { zle -R; return; }
+    [[ ${#prefix} -lt 2 ]] && { zle -R; return; }
     local match
-    match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${(q)prefix}" | sed 's/^[0-9 \t]*//')
+    match=$(fc -lnr 1 2>/dev/null | grep -Fm1 "${prefix}" | sed 's/^[0-9 \t]*//')
     [[ -n "$match" && "$match" != "$prefix" ]] && _BT_GHOST="${match#$prefix}"
     zle -R
 }
@@ -128,7 +128,9 @@ function _bt_preexec() {
     local cmd_n="${cmd## }"
     cmd_n="${cmd_n//  / }"
     case "$cmd_n" in
-        rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
+        rm\ -rf*|rm\ -fr*|rm\ -r*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*|\
+        git\ reset\ --hard*|git\ clean\ -f*|git\ push\ --force*|git\ push\ -f\ *|\
+        history\ -c*)
             printf "${_RE} =o_o= ${_B}⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
             read -r _bt_ans
             [[ "$_bt_ans" != [yY] ]] && return 1
@@ -226,9 +228,9 @@ function _bt_display_ai() {
         expert) ;;
     esac
     echo ""
-    printf "  Run it? [y/N] "
+    printf "  Run it? [Y/n] "
     read -r _bt_run_ans
-    [[ "$_bt_run_ans" == [yY] ]] && eval "$cmd"
+    [[ "$_bt_run_ans" != [nN] ]] && eval "$cmd"
 }
 
 # ── display local response ────────────────────────────────────────────────────
@@ -245,14 +247,22 @@ function _bt_display_local() {
         expert) ;;
     esac
     echo ""
-    printf "  Run it? [y/N] "
+    printf "  Run it? [Y/n] "
     read -r _bt_run_ans
-    [[ "$_bt_run_ans" == [yY] ]] && eval "$_BT_CMD"
+    [[ "$_bt_run_ans" != [nN] ]] && eval "$_BT_CMD"
 }
 
 # ── qq ────────────────────────────────────────────────────────────────────────
 function qq() {
     local query="$*"
+    # Warn if query contains shell syntax
+    if [[ "$query" =~ '[|><&;]' ]]; then
+        printf "${_CY} =-.^= Don't include shell syntax (| > & ;) in qq — just describe what you want${_R}\n"
+        printf "${_CY}  e.g. 'qq show files sorted by size' not 'qq ls | sort'${_R}\n"
+        return 1
+    fi
+    # Strip punctuation
+    query="${query//[?!.,\'\"]/}"
 
     if [[ "$1" == "level" && -n "$2" ]]; then
         case "$2" in

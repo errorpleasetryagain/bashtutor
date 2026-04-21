@@ -20,23 +20,22 @@ mkdir -p "$BASHTUTOR_DIR" 2>/dev/null
 
 # ── colours ───────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
-    _OR=$(printf '\033[38;5;202m')   # orange — commands, prompts
-    _DG=$(printf '\033[38;5;22m')    # dark green — success, level
-    _GH=$(printf '\033[38;5;240m')   # grey — ghost text
-    _CY=$(printf '\033[0;36m')       # cyan — notes, explanations
-    _RE=$(printf '\033[0;31m')       # red — warnings
-    _B=$(printf '\033[1m')           # bold
-    _R=$(printf '\033[0m')           # reset
+    _OR=$(printf '\033[38;5;214m')   # gold/bright orange
+    _DG=$(printf '\033[38;5;34m')    # bright green
+    _GH=$(printf '\033[38;5;245m')   # light grey (more visible)
+    _CY=$(printf '\033[38;5;51m')    # bright cyan
+    _RE=$(printf '\033[38;5;196m')   # bright red
+    _B=$(printf '\033[1m')
+    _R=$(printf '\033[0m')
 else
     _OR="" _DG="" _GH="" _CY="" _RE="" _B="" _R=""
 fi
 
-_bt_cmd()  { printf "${_OR}${_B}  %s${_R}\n" "$*"; }
 _bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
 _bt_err()  { printf "${_RE}  ✗ %s${_R}\n" "$*" >&2; }
 
 # ── boot line ─────────────────────────────────────────────────────────────────
-printf "${_OR}${_B}❯ BashTutor${_R} \e[32m[%s]\e[0m  type ${_OR}qq help${_R} to start\n" "$BASHTUTOR_LEVEL"
+printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}v%s [%s]${_R}  ${_CY}qq help${_R} to start\n" "$BASHTUTOR_VERSION" "$BASHTUTOR_LEVEL"
 
 # ── fish-style predictive ghost text ─────────────────────────────────────────
 typeset -g _BT_GHOST=""
@@ -103,9 +102,9 @@ typeset -gA _BT_SMART=(
 function _bt_ghost_update() {
     local prefix="$BUFFER"
     _BT_GHOST=""
-    [[ ${#prefix} -lt 1 ]] && { zle -R; return; }
+    [[ ${#prefix} -lt 2 ]] && { zle -R; return; }
     local match
-    match=$(fc -lnr 1 2>/dev/null | grep -m1 "^${(q)prefix}" | sed 's/^[0-9 \t]*//')
+    match=$(fc -lnr 1 2>/dev/null | grep -Fm1 "${prefix}" | sed 's/^[0-9 \t]*//')
     if [[ -n "$match" && "$match" != "$prefix" ]]; then
         _BT_GHOST="${match#$prefix}"
     elif [[ ${#prefix} -ge 1 && -n "${_BT_SMART[$prefix]}" ]]; then
@@ -157,22 +156,18 @@ function _bt_ghost_clear() {
 zle -N _bt_ghost_clear
 add-zle-hook-widget line-finish _bt_ghost_clear
 
-# ── ascii cat reactions ───────────────────────────────────────────────────────
-function _bt_cat_happy()    { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =^.^= ${_R}"; }
-function _bt_cat_thinking() { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =-.^= ${_R}"; }
-function _bt_cat_warn()     { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =o_o= ${_R}"; }
-
 # ── destructive command warning ───────────────────────────────────────────────
 function _bt_preexec() {
     POSTDISPLAY=""
     _BT_GHOST=""
     export _BT_LAST_CMD="$1"
     local cmd="$1"
-    # Normalise for matching: strip leading spaces, collapse runs of spaces
     local cmd_n="${cmd## }"
     cmd_n="${cmd_n//  / }"
     case "$cmd_n" in
-        rm\ -rf*|rm\ -fr*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*)
+        rm\ -rf*|rm\ -fr*|rm\ -r*|dd\ if=*|mkfs*|shred\ *|chmod\ -R\ 777*|\
+        git\ reset\ --hard*|git\ clean\ -f*|git\ push\ --force*|git\ push\ -f\ *|\
+        history\ -c*)
             printf "${_RE} =o_o= ${_B}⚠  Destructive: %s${_R}\n  Continue? [y/N] " "$cmd"
             read -r _bt_ans
             [[ "$_bt_ans" != [yY] ]] && { BUFFER=""; zle redisplay 2>/dev/null; return 1; }
@@ -188,7 +183,6 @@ function _bt_lookup() {
     _BT_CMD="" _BT_NOTE_B="" _BT_NOTE_I=""
 
     case "$q" in
-# FILES & DIRECTORIES
         *list*file*|*show*file*|*display*file*|*what*here*|*ls\ *)
             _BT_CMD="ls -la"
             _BT_NOTE_B="Lists every file here, including hidden ones (starting with .)"
@@ -233,7 +227,6 @@ function _bt_lookup() {
             _BT_CMD="cd /path/to/folder"
             _BT_NOTE_B="Changes into a folder — use Tab to autocomplete paths"
             _BT_NOTE_I="# Tab autocompletes" ;;
-# TEXT VIEWING
         *view*file*|*show*file*|*display*file*|*read*file*|*print*file*|*show*content*|*cat\ *)
             _BT_CMD="cat file.txt"
             _BT_NOTE_B="Prints the whole file to the screen"
@@ -254,7 +247,6 @@ function _bt_lookup() {
             _BT_CMD="nano file.txt"
             _BT_NOTE_B="Opens a file in nano editor — Ctrl+O saves, Ctrl+X exits"
             _BT_NOTE_I="# ^O=save ^X=exit ^W=find" ;;
-# SEARCH
         *search*text*|*find*text*|*search*word*|*grep\ *)
             _BT_CMD="grep -r 'pattern' ."
             _BT_NOTE_B="Searches for text inside all files in this folder and subfolders"
@@ -287,7 +279,6 @@ function _bt_lookup() {
             _BT_CMD="sort file.txt | uniq"
             _BT_NOTE_B="Removes duplicate lines — must sort first so dupes are adjacent"
             _BT_NOTE_I="# uniq -c=count occurrences" ;;
-# DISK & SPACE
         *disk*space*|*free*space*|*df\ *)
             _BT_CMD="df -h"
             _BT_NOTE_B="Shows how much disk space is free on each drive"
@@ -300,7 +291,6 @@ function _bt_lookup() {
             _BT_CMD="du -sh * | sort -rh | head -20"
             _BT_NOTE_B="Shows the 20 biggest items here, largest first"
             _BT_NOTE_I="# sort -rh = reverse human-sort" ;;
-# ARCHIVES
         *creat*archive*|*compress*folder*|*make*tar*)
             _BT_CMD="tar -czf archive.tar.gz folder/"
             _BT_NOTE_B="Compresses a folder into a .tar.gz archive"
@@ -317,7 +307,6 @@ function _bt_lookup() {
             _BT_CMD="unzip archive.zip"
             _BT_NOTE_B="Extracts a .zip archive here"
             _BT_NOTE_I="# -d folder/ to extract into a folder" ;;
-# PERMISSIONS
         *permiss*|*chmod*|*who*can*)
             _BT_CMD="chmod 755 file"
             _BT_NOTE_B="Sets permissions: 7=owner all, 5=others read+run — think rwx"
@@ -334,7 +323,6 @@ function _bt_lookup() {
             _BT_CMD="ls -la"
             _BT_NOTE_B="The left column shows permissions: rwxrwxrwx = owner/group/others"
             _BT_NOTE_I="# r=read w=write x=execute -=none" ;;
-# PROCESSES
         *running*process*|*what*running*|*process*list*)
             _BT_CMD="ps aux"
             _BT_NOTE_B="Lists all running processes with CPU and memory usage"
@@ -363,7 +351,6 @@ function _bt_lookup() {
             _BT_CMD="lsof -ti:3000 | xargs kill -9"
             _BT_NOTE_B="Kills whatever process is using port 3000 (change the number)"
             _BT_NOTE_I="# -t=PIDs only, piped to xargs kill" ;;
-# NETWORKING
         *test*connect*|*ping\ *|*reachable*)
             _BT_CMD="ping -c 4 google.com"
             _BT_NOTE_B="Tests if you can reach a server — sends 4 packets, shows speed"
@@ -384,7 +371,6 @@ function _bt_lookup() {
             _BT_CMD="rsync -avz source/ dest/"
             _BT_NOTE_B="Syncs folders — only copies what changed, much faster than cp"
             _BT_NOTE_I="# -a=archive -v=verbose -z=compress" ;;
-# ENVIRONMENT & SHELL
         *set*var*|*env*var*|*export\ *)
             _BT_CMD="export VAR=value"
             _BT_NOTE_B="Sets an environment variable for this session and child processes"
@@ -417,7 +403,6 @@ function _bt_lookup() {
             _BT_CMD="clear"
             _BT_NOTE_B="Clears the terminal screen (scroll up to see old output)"
             _BT_NOTE_I="# Ctrl+L also clears the screen" ;;
-# GIT
         *git*status*|*what*changed*git*)
             _BT_CMD="git status"
             _BT_NOTE_B="Shows which files have been changed, added, or deleted"
@@ -470,7 +455,6 @@ function _bt_lookup() {
             _BT_CMD="git merge branch-name"
             _BT_NOTE_B="Merges another branch's changes into your current branch"
             _BT_NOTE_I="# --no-ff to always create a merge commit" ;;
-# BREW / NPM / PYTHON / DOCKER
         *brew*install*|*install*homebrew*)
             _BT_CMD="brew install packagename"
             _BT_NOTE_B="Installs a package via Homebrew — the macOS package manager"
@@ -503,7 +487,6 @@ function _bt_lookup() {
             _BT_CMD="docker ps"
             _BT_NOTE_B="Lists all running Docker containers"
             _BT_NOTE_I="# -a = include stopped containers" ;;
-# SYSTEM
         *system*info*|*os*version*|*uname*)
             _BT_CMD="uname -a"
             _BT_NOTE_B="Shows your OS, kernel version, and architecture"
@@ -524,7 +507,6 @@ function _bt_lookup() {
             _BT_CMD="whoami"
             _BT_NOTE_B="Prints your current username"
             _BT_NOTE_I="# id for full user info" ;;
-# SCRIPTING
         *if*statement*|*condition*check*)
             _BT_CMD="if [[ condition ]]; then echo yes; fi"
             _BT_NOTE_B="Basic if/then — use [[ ]] for conditions in zsh/bash"
@@ -573,7 +555,6 @@ function _bt_lookup() {
             _BT_CMD="./script.sh"
             _BT_NOTE_B="Runs a script in the current folder (must be executable first)"
             _BT_NOTE_I="# chmod +x script.sh to make it executable" ;;
-# FILES — ADVANCED
         *count*line*|*how*many*line*|*wc\ *|*word*count*|*line*count*)
             _BT_CMD="wc -l file.txt"
             _BT_NOTE_B="Counts lines in a file — -w counts words, -c counts characters"
@@ -614,7 +595,6 @@ function _bt_lookup() {
             _BT_CMD="open https://example.com"
             _BT_NOTE_B="Opens a URL in your default browser"
             _BT_NOTE_I="# open also works on files and apps" ;;
-# NETWORKING
         *ip*address*|*my*ip*|*what*ip*|*ifconfig*|*network*interface*)
             _BT_CMD="ipconfig getifaddr en0"
             _BT_NOTE_B="Shows your local IP address (en0=WiFi, en1=Ethernet on Mac)"
@@ -647,7 +627,6 @@ function _bt_lookup() {
             _BT_CMD="python3 -m http.server 8000"
             _BT_NOTE_B="Starts a simple web server in the current folder on port 8000"
             _BT_NOTE_I="# visit http://localhost:8000 in browser" ;;
-# CLIPBOARD & TEXT
         *copy*clipboard*|*pbcopy*|*clipboard*)
             _BT_CMD="echo 'text' | pbcopy"
             _BT_NOTE_B="Copies text to the clipboard — paste anywhere with Cmd+V"
@@ -680,7 +659,6 @@ function _bt_lookup() {
             _BT_CMD="echo $((2 + 2))"
             _BT_NOTE_B="Does arithmetic in the shell — supports + - * / and %"
             _BT_NOTE_I="# \$(( expr )) for any math" ;;
-# SYSTEM — macOS
         *sudo*|*admin*|*run*admin*|*run*root*)
             _BT_CMD="sudo command"
             _BT_NOTE_B="Runs a command as admin — it will ask for your password"
@@ -717,7 +695,6 @@ function _bt_lookup() {
             _BT_CMD="diskutil list"
             _BT_NOTE_B="Lists all mounted drives and partitions on macOS"
             _BT_NOTE_I="# diskutil info /dev/disk0 for details" ;;
-# PROCESSES & MONITORING
         *monitor*process*|*watch*process*|*cpu*usage*)
             _BT_CMD="top -o cpu"
             _BT_NOTE_B="Shows live CPU usage, sorted by most CPU first"
@@ -746,7 +723,6 @@ function _bt_lookup() {
             _BT_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
             _BT_NOTE_B="Installs Homebrew — the macOS package manager"
             _BT_NOTE_I="# one-line installer from homebrew.sh" ;;
-# SHELL & ENVIRONMENT
         *what*shell*|*current*shell*|*which*shell*)
             _BT_CMD="echo $SHELL"
             _BT_NOTE_B="Shows your current default shell (e.g. /bin/zsh)"
@@ -759,7 +735,6 @@ function _bt_lookup() {
             _BT_CMD='VAR="hello"; echo "$VAR"'
             _BT_NOTE_B="Sets a variable and prints it — use \$ to read a variable"
             _BT_NOTE_I="# export VAR to share with child processes" ;;
-# CRON
         *cron*job*|*schedule*task*|*crontab*)
             _BT_CMD="crontab -e"
             _BT_NOTE_B="Opens your cron schedule for editing — runs tasks automatically"
@@ -768,6 +743,58 @@ function _bt_lookup() {
             _BT_CMD="crontab -l"
             _BT_NOTE_B="Lists your current scheduled cron jobs"
             _BT_NOTE_I="# crontab -r to remove all" ;;
+        *save*work*|*save*changes*|*commit*work*)
+            _BT_CMD="git add . && git commit -m 'WIP'"
+            _BT_NOTE_B="Saves all your current changes to git with a 'WIP' message"
+            _BT_NOTE_I="# stage all + commit" ;;
+        *test*internet*|*test*connection*|*am*i*online*)
+            _BT_CMD="ping -c 3 8.8.8.8"
+            _BT_NOTE_B="Tests your internet connection by pinging Google's DNS server"
+            _BT_NOTE_I="# -c 3 = send 3 packets" ;;
+        *how*much*space*|*storage*space*|*check*space*)
+            _BT_CMD="df -h /"
+            _BT_NOTE_B="Shows how much disk space is free on your main drive"
+            _BT_NOTE_I="# / = root drive -h = human readable" ;;
+        *what*using*cpu*|*cpu*usage*|*high*cpu*)
+            _BT_CMD="top -o cpu -l 1 | head -20"
+            _BT_NOTE_B="Shows the top processes using the most CPU right now"
+            _BT_NOTE_I="# -o cpu = sort by cpu -l 1 = one snapshot" ;;
+        *copy*folder*|*duplicat*folder*)
+            _BT_CMD="cp -r source/ dest/"
+            _BT_NOTE_B="Copies an entire folder and everything inside it"
+            _BT_NOTE_I="# -r = recursive (required for folders)" ;;
+        *install*npm*|*npm*package*|*node*package*)
+            _BT_CMD="npm install packagename"
+            _BT_NOTE_B="Installs a Node.js package into your current project"
+            _BT_NOTE_I="# -g to install globally" ;;
+        *reload*terminal*|*reload*shell*|*restart*shell*)
+            _BT_CMD="source ~/.zshrc"
+            _BT_NOTE_B="Reloads your shell config without closing the terminal"
+            _BT_NOTE_I="# same as opening a new terminal" ;;
+        *what*did*i*change*|*what*changed*|*show*diff*)
+            _BT_CMD="git diff"
+            _BT_NOTE_B="Shows exactly what lines you have changed but not yet saved to git"
+            _BT_NOTE_I="# --staged to see staged changes" ;;
+        *stash*|*save*for*later*|*put*aside*)
+            _BT_CMD="git stash"
+            _BT_NOTE_B="Puts your current changes aside so you can work on something else"
+            _BT_NOTE_I="# git stash pop to bring them back" ;;
+        *clone*|*download*repo*|*get*repo*)
+            _BT_CMD="git clone https://github.com/user/repo"
+            _BT_NOTE_B="Downloads a full copy of a git repository to your machine"
+            _BT_NOTE_I="# --depth 1 for faster shallow clone" ;;
+        *push*github*|*upload*github*|*push*remote*)
+            _BT_CMD="git push origin main"
+            _BT_NOTE_B="Uploads your commits to GitHub on the main branch"
+            _BT_NOTE_I="# -u origin main to set upstream first time" ;;
+        *pull*latest*|*get*latest*|*update*repo*)
+            _BT_CMD="git pull"
+            _BT_NOTE_B="Downloads and merges the latest changes from the remote"
+            _BT_NOTE_I="# git fetch if you just want to check" ;;
+        *apt*get*|*apt\ install*|*dnf*|*yum*|*pacman*)
+            _BT_CMD="brew install packagename"
+            _BT_NOTE_B="That command is Linux-only. On macOS use Homebrew instead"
+            _BT_NOTE_I="# brew install replaces apt-get on macOS" ;;
         *help*|*what*can*|*example*)
             _BT_CMD=""
             _bt_help
@@ -792,14 +819,22 @@ function _bt_display() {
         expert) ;;
     esac
     echo ""
-    printf "  Run it? [y/N] "
+    printf "  Run it? [Y/n] "
     read -r _bt_run_ans
-    [[ "$_bt_run_ans" == [yY] ]] && eval "$_BT_CMD"
+    [[ "$_bt_run_ans" != [nN] ]] && eval "$_BT_CMD"
 }
 
 # ── qq ────────────────────────────────────────────────────────────────────────
 function qq() {
     local query="$*"
+    # Warn if query contains shell syntax
+    if [[ "$query" =~ '[|><&;]' ]]; then
+        printf "${_CY} =-.^= Don't include shell syntax (| > & ;) in qq — just describe what you want${_R}\n"
+        printf "${_CY}  e.g. 'qq show files sorted by size' not 'qq ls | sort'${_R}\n"
+        return 1
+    fi
+    # Strip punctuation
+    query="${query//[?!.,\'\"]/}"
 
     if [[ "$1" == "level" && -n "$2" ]]; then
         case "$2" in
