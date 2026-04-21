@@ -32,6 +32,14 @@ else
     _OR="" _DG="" _GH="" _CY="" _RE="" _B="" _R=""
 fi
 
+# Detect if terminal supports inline ghost text (POSTDISPLAY)
+_BT_GHOST_SUPPORTED=0
+if [[ "$TERM_PROGRAM" == "iTerm.app" || "$TERM_PROGRAM" == "WarpTerminal" || \
+      "$TERM_PROGRAM" == "alacritty" || -n "$ITERM_SESSION_ID" || \
+      "$COLORTERM" == "truecolor" ]]; then
+    _BT_GHOST_SUPPORTED=1
+fi
+
 _bt_cmd()  { printf "${_OR}${_B}  %s${_R}\n" "$*"; }
 _bt_note() { printf "${_CY}  %s${_R}\n" "$*"; }
 _bt_warn() { printf "${_RE}  ⚠  %s${_R}\n" "$*"; }
@@ -58,7 +66,8 @@ else
     printf "${_OR}${_B}❯ BashTutor${_R} ${_DG}v%s [local·%s]${_R}  ${_RE}openclaw not found, using patterns${_R}\n" "$BASHTUTOR_VERSION" "$BASHTUTOR_LEVEL"
 fi
 
-# ── fish-style predictive ghost text ─────────────────────────────────────────
+# ── fish-style predictive ghost text (supported terminals only) ───────────────
+if [[ $_BT_GHOST_SUPPORTED -eq 1 ]]; then
 typeset -g _BT_GHOST=""
 
 function _bt_ghost_update() {
@@ -112,6 +121,52 @@ function _bt_ghost_clear() {
 }
 zle -N _bt_ghost_clear
 add-zle-hook-widget line-finish _bt_ghost_clear
+fi
+
+# ── right-prompt command hint (works in all terminals) ──────────────────────
+typeset -g _BT_HINT=""
+
+function _bt_hint_update() {
+    local prefix="$BUFFER"
+    _BT_HINT=""
+    [[ ${#prefix} -lt 2 ]] && { RPS1=""; zle reset-prompt 2>/dev/null; return; }
+
+    if [[ -n "${_BT_SMART[$prefix]}" ]]; then
+        _BT_HINT="${_BT_SMART[$prefix]}"
+    else
+        local match
+        match=$(fc -lnr 1 2>/dev/null | grep -Fm1 "${prefix}" | sed 's/^[0-9 \t]*//')
+        [[ -n "$match" && "$match" != "$prefix" ]] && _BT_HINT="$match"
+    fi
+
+    if [[ -n "$_BT_HINT" && ${#_BT_HINT} -lt 60 ]]; then
+        RPS1="${_GH}${_BT_HINT}${_R}"
+    else
+        RPS1=""
+    fi
+    zle reset-prompt 2>/dev/null
+}
+
+function _bt_hint_clear() {
+    _BT_HINT=""
+    RPS1=""
+    zle reset-prompt 2>/dev/null
+}
+
+zle -N _bt_hint_update
+zle -N _bt_hint_clear
+
+function _bt_self_insert_hint() {
+    zle .self-insert
+    _bt_hint_update
+}
+
+if [[ $_BT_GHOST_SUPPORTED -eq 0 ]]; then
+    zle -N self-insert _bt_self_insert_hint
+fi
+
+autoload -Uz add-zle-hook-widget 2>/dev/null
+add-zle-hook-widget line-finish _bt_hint_clear 2>/dev/null
 
 # ── ascii cat reactions ───────────────────────────────────────────────────────
 function _bt_cat_happy()    { [[ $(tput cols 2>/dev/null) -gt 40 ]] && printf "${_OR} =^.^= ${_R}"; }
