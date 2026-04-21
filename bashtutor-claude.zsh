@@ -184,10 +184,10 @@ function _bt_local_lookup() {
     local q="${1:l}"
     _BT_CMD="" _BT_NOTE_B="" _BT_NOTE_I=""
     case "$q" in
-        *(list|show|display)*file*|*what*here*) _BT_CMD="ls -la"; _BT_NOTE_B="Lists all files including hidden"; _BT_NOTE_I="# -l=details -a=hidden" ;;
-        *(creat|make)*folder*|*mkdir*) _BT_CMD="mkdir -p folder"; _BT_NOTE_B="Creates a folder"; _BT_NOTE_I="# -p=ok if exists" ;;
-        *(delet|remov)*folder*) _BT_CMD="rm -rf folder"; _BT_NOTE_B="Deletes folder and contents — no undo!"; _BT_NOTE_I="# CAREFUL" ;;
-        *(delet|remov)*file*) _BT_CMD="rm filename"; _BT_NOTE_B="Deletes a file permanently"; _BT_NOTE_I="# no recycle bin" ;;
+        *list*file*|*show*file*|*display*file*|*what*here*) _BT_CMD="ls -la"; _BT_NOTE_B="Lists all files including hidden"; _BT_NOTE_I="# -l=details -a=hidden" ;;
+        *creat*folder*|*make*folder*|*mkdir*) _BT_CMD="mkdir -p folder"; _BT_NOTE_B="Creates a folder"; _BT_NOTE_I="# -p=ok if exists" ;;
+        *delet*folder*|*remov*folder*) _BT_CMD="rm -rf folder"; _BT_NOTE_B="Deletes folder and contents — no undo!"; _BT_NOTE_I="# CAREFUL" ;;
+        *delet*file*|*remov*file*) _BT_CMD="rm filename"; _BT_NOTE_B="Deletes a file permanently"; _BT_NOTE_I="# no recycle bin" ;;
         *copy*file*) _BT_CMD="cp source dest"; _BT_NOTE_B="Copies a file"; _BT_NOTE_I="# -r for folders" ;;
         *move*|*renam*) _BT_CMD="mv old new"; _BT_NOTE_B="Moves or renames a file"; _BT_NOTE_I="# same command" ;;
         *search*text*|*find*text*|*grep*) _BT_CMD="grep -r 'pattern' ."; _BT_NOTE_B="Searches for text in all files"; _BT_NOTE_I="# -i=case-insensitive -n=line numbers" ;;
@@ -204,7 +204,7 @@ function _bt_local_lookup() {
         *git*branch*) _BT_CMD="git checkout -b branch"; _BT_NOTE_B="Creates and switches to new branch"; _BT_NOTE_I="# git branch to list" ;;
         *port*|*listen*) _BT_CMD="lsof -i -P | grep LISTEN"; _BT_NOTE_B="Shows open ports"; _BT_NOTE_I="# -P=port numbers" ;;
         *process*|*running*) _BT_CMD="ps aux"; _BT_NOTE_B="Lists all running processes"; _BT_NOTE_I="# | grep name to filter" ;;
-        *(kill|stop)*process*) _BT_CMD="pkill -f name"; _BT_NOTE_B="Stops a process by name"; _BT_NOTE_I="# kill PID for by ID" ;;
+        *kill*process*|*stop*process*) _BT_CMD="pkill -f name"; _BT_NOTE_B="Stops a process by name"; _BT_NOTE_I="# kill PID for by ID" ;;
         *download*|*curl*) _BT_CMD="curl -O https://url/file"; _BT_NOTE_B="Downloads a file"; _BT_NOTE_I="# -L=follow redirects" ;;
         *ssh*|*remote*server*) _BT_CMD="ssh user@host"; _BT_NOTE_B="Connects to a remote server"; _BT_NOTE_I="# -i=key file" ;;
         *pipe*|*chain*) _BT_CMD="cmd1 | cmd2"; _BT_NOTE_B="Sends output of cmd1 into cmd2"; _BT_NOTE_I="# stdout → stdin" ;;
@@ -212,7 +212,7 @@ function _bt_local_lookup() {
         *for*loop*) _BT_CMD='for f in *; do echo "$f"; done'; _BT_NOTE_B="Loops over items"; _BT_NOTE_I="# $f = current item" ;;
         *alias*) _BT_CMD="alias ll='ls -la'"; _BT_NOTE_B="Creates a command shortcut"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
         *reload*config*|*source*zshrc*) _BT_CMD="source ~/.zshrc"; _BT_NOTE_B="Reloads your shell config"; _BT_NOTE_I="# . ~/.zshrc also works" ;;
-        *(set|export)*var*|*env*var*) _BT_CMD="export VAR=value"; _BT_NOTE_B="Sets an environment variable"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
+        *set*var*|*export*var*|*env*var*) _BT_CMD="export VAR=value"; _BT_NOTE_B="Sets an environment variable"; _BT_NOTE_I="# add to ~/.zshrc to persist" ;;
         *) return 1 ;;
     esac
     return 0

@@ -193,11 +193,11 @@ function _bt_lookup() {
             _BT_CMD="ls -la"
             _BT_NOTE_B="Lists every file here, including hidden ones (starting with .)"
             _BT_NOTE_I="# -l=details -a=hidden files" ;;
-        *new*file*|*(creat|make)*file*|*touch\ *)
+        *new*file*|*creat*file*|*make*file*|*touch\ *)
             _BT_CMD="touch filename.txt"
             _BT_NOTE_B="Creates an empty file (updates timestamp if it exists)"
             _BT_NOTE_I="# creates or refreshes timestamp" ;;
-        *(creat|make)*folder*|(creat|make)*dir*|*new*folder*|*mkdir\ *)
+        *creat*folder*|*make*folder*|*creat*dir*|*make*dir*|*new*folder*|*mkdir\ *)
             _BT_CMD="mkdir -p folder/name"
             _BT_NOTE_B="Creates a folder — -p also creates any missing parent folders"
             _BT_NOTE_I="# -p = ok if parents don't exist" ;;
@@ -209,11 +209,11 @@ function _bt_lookup() {
             _BT_CMD="mv old.txt new.txt"
             _BT_NOTE_B="Moves or renames a file — same command for both"
             _BT_NOTE_I="# mv works for files and folders" ;;
-        *(delet|remov)*file*)
+        *delet*file*|*remov*file*)
             _BT_CMD="rm filename"
             _BT_NOTE_B="Deletes a file permanently — no Trash, no undo"
             _BT_NOTE_I="# permanent, no recycle bin" ;;
-        *(delet|remov)*folder*|(delet|remov)*dir*)
+        *delet*folder*|*remov*folder*|*delet*dir*|*remov*dir*)
             _BT_CMD="rm -rf foldername"
             _BT_NOTE_B="Deletes a folder and everything inside — no undo!"
             _BT_NOTE_I="# -r=recursive -f=force — CAREFUL" ;;
@@ -234,7 +234,7 @@ function _bt_lookup() {
             _BT_NOTE_B="Changes into a folder — use Tab to autocomplete paths"
             _BT_NOTE_I="# Tab autocompletes" ;;
 # TEXT VIEWING
-        *(view|show|display)*file*|*read*file*|*print*file*|*show*content*|*cat\ *)
+        *view*file*|*show*file*|*display*file*|*read*file*|*print*file*|*show*content*|*cat\ *)
             _BT_CMD="cat file.txt"
             _BT_NOTE_B="Prints the whole file to the screen"
             _BT_NOTE_I="# dumps entire file to stdout" ;;
@@ -250,7 +250,7 @@ function _bt_lookup() {
             _BT_CMD="tail -f logfile.log"
             _BT_NOTE_B="Watches a log file live — new lines appear as they're written"
             _BT_NOTE_I="# -f=follow, Ctrl+C to stop" ;;
-        *edit*file*|*(open|view)*editor*|*nano*)
+        *edit*file*|*open*editor*|*view*editor*|*nano*)
             _BT_CMD="nano file.txt"
             _BT_NOTE_B="Opens a file in nano editor — Ctrl+O saves, Ctrl+X exits"
             _BT_NOTE_I="# ^O=save ^X=exit ^W=find" ;;
@@ -322,7 +322,7 @@ function _bt_lookup() {
             _BT_CMD="chmod 755 file"
             _BT_NOTE_B="Sets permissions: 7=owner all, 5=others read+run — think rwx"
             _BT_NOTE_I="# 4=read 2=write 1=exec; owner/group/others" ;;
-        *(make|creat)*executable*|*run*script*chmod*)
+        *make*executable*|*creat*executable*|*run*script*chmod*)
             _BT_CMD="chmod +x script.sh"
             _BT_NOTE_B="Makes a script executable so you can run it with ./script.sh"
             _BT_NOTE_I="# +x = add execute permission" ;;
